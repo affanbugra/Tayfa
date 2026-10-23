@@ -63,7 +63,7 @@ görünümlü bir web uygulaması.
 | Ön teyit | **Yok.** "Gelecek / Haber Verecek / Ulaşamadım" gibi etkinlik öncesi durumlar eklenmez. Yoklama sadece Geldi / Gelmedi / Mazeret. |
 | Bildirimler | Şimdilik **yok** (e-posta da push da yok). Panelde görsel uyarılar var (ör. "bu hafta yoklama girilmedi"). |
 | Cihaz | **Telefon öncelikli.** Yoklama ekranı tek elle kullanılabilir. Yönetim raporları masaüstünde de rahat okunur. PWA olarak ana ekrana eklenebilir. |
-| Tasarım | **Tayfa / Esenler Gençlik Spor kurumsal kimliği.** Logo ve renkler bekleniyor (§13). Gelene kadar §8'deki nötr token'lar kullanılır; logo gelince sadece token'lar değişir. |
+| Tasarım | **Tayfa kurumsal kimliği**: turkuaz `#4BBACD` + çapa sarısı `#FBC52F`, logo `public/brand/tayfa-logo-square.png`. Kontrast kuralları ve token'lar §8'de. |
 | Takvim | **1–2 hafta içinde MVP** canlıya çıkar (yoklama + öğrenci + içe aktarma + temel yönetim görünümü). Raporlar, sorgu ve eşleştirme sonraki fazlarda gelir. |
 
 ---
@@ -108,7 +108,7 @@ Yeni bağımlılık eklemeden önce mevcut yığınla çözülüp çözülemeyec
 - Bir liderin tek ekibi olur. Bir ekibin tek lideri olur. Lider değişirse admin `teams.leader_id` alanını günceller.
 - Koordinatör bir veya birden çok okula bağlanır ve o okullardan öğrencisi olan ekipleri görür.
 - **Yetki kontrolü veritabanında, RLS ile yapılır.** UI'daki gizleme sadece kolaylık içindir, güvenlik ona dayanmaz. Her tabloda RLS açık olur. Server action'lar kullanıcının oturumuyla çalışır; `service_role` anahtarı sadece içe aktarma ve seed script'lerinde, sunucu tarafında kullanılır.
-- İlk admin: `affanbugraozaytas@gmail.com` (teyit bekleniyor, §13). Seed migration bu e-postayı `admin` olarak davet listesine ekler.
+- İlk admin, `INITIAL_ADMIN_EMAILS` ortam değişkeninden gelir (virgülle birden çok e-posta yazılabilir; varsayılan öneri `affanbugraozaytas@gmail.com`). Seed script bu e-postaları `admin` olarak davet listesine ekler. Sonraki adminler panelden eklenir.
 
 ---
 
@@ -372,32 +372,60 @@ tests/ (unit, e2e)
 
 Yasaklar: gradyan arka planlar, parlayan veya bulanık efektler, emoji, "✨" ya da yıldız ikonları, her kartta renkli ikon kutusu, aşırı yuvarlak köşeler, büyük boş "hero" alanları, "Hoş geldin 👋" tarzı metinler, pastel gökkuşağı paletleri, gereksiz animasyon.
 
+**Marka (logodan ölçüldü):** Tayfa logosu turkuaz zemin üzerine beyaz, yuvarlak hatlı geometrik bir "tayfa" yazısı ve sarı bir çapadan oluşuyor. Dosya: `public/brand/tayfa-logo-square.png` (622×622, turkuaz zeminli kare).
+- **Turkuaz `#4BBACD`**: markanın ana rengi.
+- **Çapa sarısı `#FBC52F`**: vurgu rengi.
+
+**Kontrast kuralı (önemli):** Logodaki turkuaz beyaz zeminde metin veya buton rengi olarak **kullanılamaz** (kontrast 2,3:1, AA için en az 4,5 gerekir). Sarı da beyaz üzerinde okunmaz (1,6:1). Bu yüzden:
+- Etkileşim rengi (butonlar, bağlantılar, odak halkası, seçili sekme) turkuazın koyu tonudur: **`--brand-strong #17788A`**. Beyaz metinle kontrast 5,1:1.
+- Logodaki turkuaz (`--brand`) **geniş yüzeylerde** kullanılır: giriş ekranı zemini, üst bant / kenar çubuğu başlığı, PWA açılış ekranı. Bu yüzeylerde metin beyaz ve büyük (≥ 18px kalın) ya da koyu (`--text`) olur.
+- Sarı (`--accent`) **sadece küçük vurgularda** kullanılır: aktif menü göstergesi (ince çizgi), "Bu hafta" rozeti (sarı zemin + koyu metin), grafikte seçili / öne çıkan seri. Sarı zeminde metin her zaman `--text` olur.
+
+**Logo kullanımı:**
+- Giriş ekranı: turkuaz tam ekran zemin, ortada logo, altında beyaz kart içinde "Google ile giriş yap".
+- Uygulama üst çubuğu / kenar çubuğu: turkuaz zemin üzerinde küçük logo, ya da beyaz zemin üzerinde turkuaz kare logo ikonu (32px).
+- Favicon ve PWA ikonları kare logodan üretilir (192, 512, maskable). Zemin zaten turkuaz olduğu için ikon olarak doğrudan uygundur.
+- Logoyu yeniden çizme, gerdirme, renklerini değiştirme. Şeffaf zeminli SVG gerekirse kullanıcıdan istenir; o gelene kadar PNG kullanılır.
+
 Yapılacaklar:
-- Beyaz / çok açık gri zemin, ince 1px çizgiler, 6–8px köşe yarıçapı.
-- Tipografi: **Inter** (Türkçe karakter desteği tam), rakamlar `tabular-nums`. Başlıklar sade, gövde metni 14–16px.
+- Beyaz / çok açık gri zemin, ince 1px çizgiler, 8px köşe yarıçapı (logonun yuvarlak karakterine uyumlu, ama "balon" kadar yuvarlak değil).
+- Tipografi: arayüzde **Inter** (Türkçe karakter desteği tam), rakamlar `tabular-nums`. Sayfa başlıkları ve KPI rakamları için logonun geometrik yuvarlak karakterine yakın **Nunito Sans** ya da **Poppins** (600) kullanılabilir. İkisinden biri seçilir, en fazla iki font ailesi olur.
 - Yoğun ama ferah tablolar (masaüstü). Mobilde kart listesi.
-- Renk yalnızca anlam taşır: durum renkleri ve marka vurgusu.
+- Renk yalnızca anlam taşır: durum renkleri ve marka vurgusu. Sayfanın geneli beyaz ve gri kalır. Turkuaz yüzeyler sadece giriş ekranı ve başlık bandında kullanılır, her kart turkuaz olmaz.
 - İkonlar: **lucide**, tek renk, 16–20px, sadece gerekli yerlerde.
 - Koyu mod: desteklenir (token tabanlı), ama varsayılan açık temadır.
 - Erişilebilirlik: kontrast WCAG AA. Durum asla sadece renkle anlatılmaz, her zaman metin veya ikon da bulunur. Klavye ile kullanılabilir.
 
-**Token'lar** (`app/globals.css` içinde CSS değişkenleri; marka gelince sadece `--brand*` değişir):
+**Token'lar** (`app/globals.css` içinde CSS değişkenleri):
 
 ```
---brand:        #1F3A5F   /* geçici lacivert — Tayfa logosu gelince güncellenecek */
---brand-fg:     #FFFFFF
---bg:           #FFFFFF
---surface:      #F7F8FA
---border:       #E3E6EB
---text:         #111827
---text-muted:   #6B7280
+/* Marka */
+--brand:          #4BBACD   /* logo turkuazı — sadece geniş yüzeyler */
+--brand-strong:   #17788A   /* butonlar, bağlantılar, odak — beyaz metinle 5.1:1 */
+--brand-deep:     #0F5A68   /* hover / basılı durum */
+--brand-tint:     #E8F6F9   /* seçili satır, hafif vurgu zemini */
+--brand-fg:       #FFFFFF
+--accent:         #FBC52F   /* çapa sarısı — sadece küçük vurgular, üzerinde koyu metin */
+--accent-tint:    #FEF6DC
 
---present:      #1E7B4F   (zemin #E7F4EC)   /* Geldi */
---absent:       #B42318   (zemin #FDECEA)   /* Gelmedi */
---excused:      #B54708   (zemin #FEF3E2)   /* Mazeret */
---at-risk:      #B54708
---removed:      #6B7280
+/* Nötr */
+--bg:             #FFFFFF
+--surface:        #F6F8F9   /* hafif turkuaza kaçan gri */
+--border:         #E1E7EA
+--text:           #111827
+--text-muted:     #5F6B73
+
+/* Durum */
+--present:        #1E7B4F   (zemin #E7F4EC)   /* Geldi */
+--absent:         #B42318   (zemin #FDECEA)   /* Gelmedi */
+--excused:        #B54708   (zemin #FEF3E2)   /* Mazeret — sarı vurgudan ayırt edilebilecek kadar turuncu */
+--at-risk:        #B54708
+--removed:        #6B7280
 ```
+
+Koyu mod için `--brand-strong` yerine `--brand` (#4BBACD) kullanılır (koyu zeminde kontrast yeterli), yüzeyler `#0F1416` / `#172024` olur.
+
+Grafiklerde ana seri `--brand-strong`, karşılaştırma serisi gri, vurgulanan tek seri `--accent` olur. 10. ve 11. sınıf serileri için `--brand-strong` ve `--brand-deep` yerine ayırt edilebilir iki ton seçilir (dataviz paleti doğrulamasıyla).
 
 Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taşır (Liderlik açık mavi, Fotoğraf lila, Şenlik koyu kırmızı, Paintball koyu yeşil, Bowling koyu mavi…). Ayarlardan değiştirilebilir, ama her zaman sınırlı ve onaylı bir paletten seçilir.
 
@@ -494,7 +522,7 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 - [ ] Program takvimi (ortak / rotasyon / ara haftalar, "döngüyü uygula")
 
 ### Faz 4 — Cila
-- [ ] Logo ve marka renkleri, boş durum ekranları, yükleme iskeletleri
+- [ ] Boş durum ekranları, yükleme iskeletleri, şeffaf SVG logo gelirse PNG yerine geçir
 - [ ] Performans (430 öğrenci küçük ölçek, ama rapor sorguları için index ve materialized view gerekirse)
 - [ ] Kullanım kılavuzu: lider için tek sayfalık "nasıl yoklama alırım" (ekran görüntülü, sahte veriyle)
 
@@ -517,6 +545,6 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 | # | Konu | Durum |
 |---|---|---|
 | 1 | Geçen yılın (2025–2026) etkinlik dosyası. | ✅ Analiz edildi, bulgular §6.9'da. Veri sisteme aktarılmaz. |
-| 2 | **Tayfa / Esenler Gençlik Spor logosu** (SVG veya yüksek çözünürlüklü PNG) ve varsa kurumsal renk kodları. | Kullanıcı gönderecek. Gelince §8 token'ları güncellenecek. |
-| 3 | İlk admin e-postası `affanbugraozaytas@gmail.com` mi? | Teyit bekleniyor. |
+| 2 | Tayfa logosu ve renkleri. | ✅ Alındı, §8'e işlendi. İleride şeffaf zeminli SVG gelirse PNG'nin yerine konur (engelleyici değil). |
+| 3 | İlk admin e-postası. | ✅ `INITIAL_ADMIN_EMAILS` ortam değişkeniyle çözüldü (§4). Faz 0'da kullanıcıya sorulup girilir. |
 | 4 | KVKK aydınlatma metni. | Belediyeden gelecek. O zamana kadar boş sayfa. |
