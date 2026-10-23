@@ -1,0 +1,491 @@
+# Tayfa Yoklama — Proje Beyni
+
+> Bu dosya, Claude Code'un bu projeyi sıfırdan inşa edip yayına alması için tek doğruluk kaynağıdır.
+> Her oturumun başında baştan sona oku. Bir karar burada yazıyorsa tartışmaya açma; yazmıyorsa
+> "Bekleyen Konular" bölümüne bak, orada da yoksa kullanıcıya sor.
+
+---
+
+## 1. Problem
+
+**Tayfa**, Esenler Belediyesi Gençlik ve Spor Müdürlüğü'nün yürüttüğü bir liderlik programıdır.
+
+- Üniversiteli **liderler** seçilir. Her lidere Esenler'deki liselerden **12–25 öğrencilik bir ekip** verilir.
+- Ekipler **her hafta sonu** buluşur. Her ekibin günü genelde sabittir (bazı ekipler hep cumartesi,
+  bazıları hep pazar; kabaca erkek ekipler cumartesi, kız ekipler pazar). Büyük etkinliklerde
+  (şenlik, büyük gezi) tüm ekipler aynı gün buluşur.
+- Belediye her hafta hangi etkinliğin yapılacağını belirler (film tahlili, gezi, workshop, bowling…).
+  Etkinlikler belli bir **döngüyle** döner; amaç her ekibin her etkinliği yapmasıdır.
+- 2026–2027 döneminde **26 ekip** var (12'si 10. sınıf, 14'ü 11. sınıf), toplam yaklaşık **430 öğrenci**.
+
+**Bugünkü durum:** Yoklama ortak bir Google Sheets dosyasında tutuluyor. Her lidere bir sayfa
+(sekme) ayrılmış. Liderler her buluşma için yeni bir sütun açıyor, etkinlik türünü ve tarihi yazıp
+her öğrenci için Geldi / Gelmedi / Mazeret seçiyor. Aynı sayfa öğrenci bilgi kartı olarak da
+kullanılıyor: TC, telefon ve veli numarası buradan kopyalanıyor.
+
+**Sorunlar:**
+- Telefondan kullanmak zor, arayüz yorucu ve hataya açık.
+- Veri tutarsız (bkz. §9): tarihler karışık, TC numaraları tarihe dönüşmüş, durumlar elle yazılmış.
+- Yönetim 26 sayfayı tek tek açmadan genel durumu göremiyor. Rapor, trend ve karşılaştırma yok.
+- Hangi ekibin hangi etkinliği kaç kez yaptığı görülemediği için haftalık eşleştirme (hangi ekip bu
+  hafta ne yapacak) elle ve tahmine dayalı yapılıyor.
+
+**Hedef:** Liderlerin Google hesabıyla girip **telefondan saniyeler içinde yoklama alabildiği**,
+öğrencilerini yönetebildiği; yönetimin tüm ekipleri **görsel raporlarla** izleyebildiği, kod
+yazmadan **filtreleyip Excel indirebildiği** ve **eşleştirme önerileri** görebildiği, kurumsal
+görünümlü bir web uygulaması.
+
+---
+
+## 2. Kesinleşmiş Kararlar
+
+| Konu | Karar |
+|---|---|
+| Barındırma | **Vercel** (uygulama) + **Supabase** (Postgres + Auth). Supabase projesi **Frankfurt (eu-central-1)** bölgesinde açılır. Kod, ileride Türkiye'de bir sunucuya taşınabilecek şekilde yazılır: standart Postgres, Supabase'e özgü kilitlenme minimum düzeyde. |
+| Domain | Ücretsiz Vercel alt adresi (ör. `tayfa-yoklama.vercel.app`). |
+| Giriş | **Sadece Google ile giriş.** Yalnızca yönetimin davet listesine eklediği e-postalar girebilir. Listede olmayan biri giriş yaparsa "Erişiminiz yok, yöneticinizle iletişime geçin" ekranını görür. |
+| Roller | `admin` (yönetim), `viewer` (sadece izleyici), `coordinator` (koordinatör öğretmen), `leader` (lider). Ayrıntılar §4'te. |
+| Lider yetkisi | Lider kendi ekibinde **tam yetkilidir**: öğrenci ekler, düzenler, durumunu değiştirir (çıkarıldı dahil). Her değişiklik denetim kaydına yazılır. |
+| Etkinlik (buluşma) oluşturma | **Lider açar.** Tarih seçer, bir veya birden çok etkinlik türü işaretler, yoklamayı alır. Yönetimin o hafta için planladığı etkinlik varsa form onunla önceden dolu gelir. |
+| Çoklu etkinlik | Bir buluşmada **tek yoklama** alınır, buluşmaya **birden çok etkinlik türü** etiketlenebilir. |
+| Yoklama değerleri | `Geldi`, `Gelmedi`, `Mazeret`. Mazeret seçilince isteğe bağlı açıklama alanı açılır. |
+| Öğrenci durumu | `Devam Ediyor`, `Devamsızlık Sınırında`, `Çıkarıldı`. |
+| Otomatik uyarı | Mazeretsiz devamsızlık sayısı eşiğe ulaşınca öğrenci **otomatik olarak** `Devamsızlık Sınırında` olur. Eşik ayarlanabilir, varsayılan **3**. `Çıkarıldı` kararı **asla otomatik verilmez**, onu insan verir. |
+| Hassas alanlar | TC ve telefon **açık** gösterilir (maskeleme yok). Lider yine sadece kendi ekibini görür (RLS). Tek tıkla kopyalama butonları olur. |
+| Dönem | Sistem **yalnızca 2026–2027** dönemini tutar. Çoklu dönem altyapısı kurulmaz. |
+| Sınıf seviyesi | Her ekibin bir `grade` değeri (10 / 11) vardır. Raporlar bu alana göre filtrelenir. |
+| Cinsiyet | Ekipler cinsiyete göre ayrılır. Ekibin `gender` alanı vardır (K / E). |
+| Bilinç Atölyesi sütunu | Kaldırılır, aktarılmaz. |
+| Excel'den geçiş | **Tek seferlik aktarım.** Sonrasında Excel arşiv olarak kalır. Sistemden her zaman Excel indirilebilir. |
+| Eşleştirme | Sistem **önerir**, karar **yönetimin** elindedir. Sistem hiçbir ekibe kendiliğinden etkinlik atamaz. Yönetim önerileri tek tıkla forma alabilir ama kaydetmek her zaman elle yapılan bir onaydır. |
+| Bildirimler | Şimdilik **yok** (e-posta da push da yok). Panelde görsel uyarılar var (ör. "bu hafta yoklama girilmedi"). |
+| Cihaz | **Telefon öncelikli.** Yoklama ekranı tek elle kullanılabilir. Yönetim raporları masaüstünde de rahat okunur. PWA olarak ana ekrana eklenebilir. |
+| Tasarım | **Tayfa / Esenler Gençlik Spor kurumsal kimliği.** Logo ve renkler bekleniyor (§13). Gelene kadar §8'deki nötr token'lar kullanılır; logo gelince sadece token'lar değişir. |
+| Takvim | **1–2 hafta içinde MVP** canlıya çıkar (yoklama + öğrenci + içe aktarma + temel yönetim görünümü). Raporlar, sorgu ve eşleştirme sonraki fazlarda gelir. |
+
+---
+
+## 3. Teknoloji Yığını
+
+- **Next.js 15** (App Router, Server Components, Server Actions) + **TypeScript (strict)**
+- **Tailwind CSS** + **shadcn/ui** (Radix tabanlı). Bileşenler §8'deki tasarım diline göre sadeleştirilir.
+- **Supabase**: Postgres, Auth (Google provider), Row Level Security. `@supabase/ssr` ile oturum.
+- **Drizzle ORM** veya SQL migration dosyaları (`supabase/migrations/*.sql`). Şema migration'larla yönetilir, panelden elle tablo açılmaz.
+- **Zod**: tüm form ve server action girdilerinin doğrulaması.
+- **TanStack Table**: öğrenci listesi, matris görünümü, sorgu önizlemesi.
+- **Recharts**: grafikler.
+- **SheetJS (`xlsx`)**: Excel okuma (içe aktarma, tarayıcıda) ve yazma (dışa aktarma).
+- **date-fns** + `tr` locale. Tüm tarihler `Europe/Istanbul` saat dilimine göre gösterilir.
+- **Vitest** (birim testleri: parser, eşik hesabı, öneri algoritması) + **Playwright** (kritik akışlar: giriş sonrası yoklama alma).
+- Paket yöneticisi: **pnpm**.
+
+Yeni bağımlılık eklemeden önce mevcut yığınla çözülüp çözülemeyeceğini düşün.
+
+---
+
+## 4. Roller ve Yetkiler
+
+| Yetenek | leader | coordinator | viewer | admin |
+|---|---|---|---|---|
+| Kendi ekibini görme | ✔ | — | — | — |
+| Kendi ekibinde yoklama alma / düzenleme | ✔ | — | — | ✔ (her ekip) |
+| Kendi ekibinde öğrenci ekleme / düzenleme / durum değiştirme | ✔ | — | — | ✔ (her ekip) |
+| Kendi ekibinin Excel'ini indirme | ✔ | ✔ (okulundaki ekipler) | ✔ | ✔ |
+| Okulundaki ekipleri görme (salt okunur) | — | ✔ | — | — |
+| Tüm ekipleri ve raporları görme (salt okunur) | — | — | ✔ | ✔ |
+| Sorgu oluşturucu + Excel indirme | — | — | ✔ | ✔ |
+| Eşleştirme panelini görme | — | — | ✔ | ✔ |
+| Eşleştirme planı kaydetme | — | — | — | ✔ |
+| Öğrenciyi ekipler arasında taşıma | — | — | — | ✔ |
+| Kullanıcı davet etme, rol ve ekip atama | — | — | — | ✔ |
+| Etkinlik türleri, eşik, okul listesi ayarları | — | — | — | ✔ |
+| Excel içe aktarma | — | — | — | ✔ |
+| Denetim kaydını görme | — | — | — | ✔ |
+
+- Bir liderin tek ekibi olur. Bir ekibin tek lideri olur. Lider değişirse admin `teams.leader_id` alanını günceller.
+- Koordinatör bir veya birden çok okula bağlanır ve o okullardan öğrencisi olan ekipleri görür.
+- **Yetki kontrolü veritabanında, RLS ile yapılır.** UI'daki gizleme sadece kolaylık içindir, güvenlik ona dayanmaz. Her tabloda RLS açık olur. Server action'lar kullanıcının oturumuyla çalışır; `service_role` anahtarı sadece içe aktarma ve seed script'lerinde, sunucu tarafında kullanılır.
+- İlk admin: `affanbugraozaytas@gmail.com` (teyit bekleniyor, §13). Seed migration bu e-postayı `admin` olarak davet listesine ekler.
+
+---
+
+## 5. Veri Modeli
+
+Tablo ve sütun adları İngilizce, UI metinleri Türkçe. Tüm tablolarda `id uuid pk default gen_random_uuid()`, `created_at`, `updated_at` bulunur.
+
+```
+profiles            -- auth.users ile 1:1
+  id (= auth.uid), email, full_name, role (admin|viewer|coordinator|leader), is_active
+
+invitations         -- davet listesi; Google girişinde e-posta eşleşirse profile oluşturulur
+  email (unique, lower), role, team_id null, school_ids uuid[] null, invited_by, accepted_at
+
+schools
+  name (unique), short_name          -- ör. "Hüsnü M. Özyeğin Anadolu Lisesi"
+
+coordinator_schools (profile_id, school_id)
+
+teams
+  name                -- varsayılan: lider adı + sınıf, ör. "Bedirhan Renez Öztürk · 10"
+  leader_id -> profiles null
+  grade smallint (10|11)
+  gender char(1) (K|E)
+  meeting_day (saturday|sunday|null)
+  is_active
+
+students
+  team_id -> teams
+  full_name
+  phone            -- normalize: 10 hane, 5XXXXXXXXX
+  parent_phone
+  school_id -> schools null, school_raw text null   -- eşleşmeyen okul adı burada kalır
+  class_label      -- "10/D", "11" vb. serbest metin
+  tc_no char(11) null, tc_valid bool
+  birth_date date null
+  school_number text null
+  status (active|at_risk|removed)
+  status_reason text null, status_changed_at, status_changed_by
+  status_locked bool default false  -- insan elle "active"e çektiyse otomatik uyarı bu sayıya tekrar tetiklemez (bkz. §6.4)
+  joined_at date
+  source (excel_main|excel_new_registration|app)
+  notes text
+
+activity_types
+  name (unique), color (token adı), sort_order, is_active, in_rotation bool  -- rotasyona girenler eşleştirmede sayılır
+
+sessions            -- bir ekibin bir buluşması = bir yoklama
+  team_id, date (date), status (held|postponed|cancelled), note, created_by
+  program_event_id -> program_events null   -- tüm ekiplerin katıldığı büyük etkinliğe bağlıysa
+  unique (team_id, date)                    -- aynı gün ikinci buluşma gerekirse UI uyarır; gerekiyorsa kısıt kaldırılabilir
+
+session_activity_types (session_id, activity_type_id)   -- çoklu etiket
+
+attendance
+  session_id, student_id, status (present|absent|excused), excuse_note, updated_by, updated_at
+  pk (session_id, student_id)
+
+program_events      -- şenlik, büyük gezi gibi tüm program çapında etkinlikler
+  name, date, activity_type_id
+
+plan_entries        -- eşleştirme planı (yönetimin onayladığı)
+  week_start date (o haftanın cumartesisi), team_id, activity_type_id, planned_date date null,
+  note, created_by, unique (week_start, team_id, activity_type_id)
+
+activity_capacity   -- isteğe bağlı: o hafta sonu bir etkinliğe en fazla kaç ekip gidebilir
+  week_start, activity_type_id, max_teams
+
+settings            -- tek satır
+  absence_threshold int default 3, program_start date default '2026-09-01', program_end date default '2027-06-30'
+
+saved_queries       -- sorgu oluşturucuda kaydedilmiş filtre ve sütun seçimleri
+  owner_id, name, definition jsonb
+
+audit_log
+  actor_id, action (insert|update|delete|export|import), entity, entity_id, diff jsonb, at
+```
+
+**Kurallar:**
+- `attendance` satırları, buluşma oluşturulurken o tarihte `status != removed` olan tüm ekip öğrencileri için **boş** oluşturulmaz. Sadece işaretlenenler yazılır. İşaretsiz öğrenci "girilmedi" sayılır ve raporda ayrıca gösterilir.
+- Çıkarılan öğrenci listeden silinmez (`status = removed`). Geçmiş yoklamaları korunur. Varsayılan listelerde gizlenir, filtreyle görünür.
+- Öğrenci silme (hard delete) sadece admin yapabilir, onay ister ve denetim kaydına yazılır.
+- `audit_log` trigger'larla doldurulur (students, attendance, sessions, teams, plan_entries). Excel dışa aktarımları da `export` olarak loglanır.
+- **Devam oranı** = `present / (present + absent + excused)`, sadece `status = held` olan buluşmalar üzerinden. Mazeret ayrıca gösterilir. Raporlarda iki oran da bulunur: "katılım" (geldi / toplam) ve "mazeretsiz devamsızlık".
+
+---
+
+## 6. Ekranlar ve Akışlar
+
+Tüm arayüz **Türkçe**. Tarih biçimi: `11 Ekim 2026 Paz`. Sıralamalar `localeCompare(…, 'tr')` ile yapılır (İ/ı, Ş, Ğ doğru sıralanmalı).
+
+### 6.1 Giriş
+- Tek ekran: logo, "Google ile giriş yap" butonu, kısa açıklama. Başka bir şey yok.
+- Giriş sonrası role göre yönlendirme: `leader` → `/ekibim`, diğer roller → `/yonetim`.
+
+### 6.2 Lider — Ekibim (`/ekibim`)
+Telefonda açılan ilk ekran. Yukarıdan aşağıya:
+1. Ekip adı, okul(lar), buluşma günü.
+2. **Büyük birincil buton: "Yoklama Al".** Bu hafta için yönetimin planı varsa altında "Bu hafta: Bowling" yazar.
+3. Son buluşmanın özeti (tarih, etkinlik, 14/20 geldi) ve "Düzenle" bağlantısı.
+4. Uyarı kartı: `Devamsızlık Sınırında` olan öğrenciler (isim + mazeretsiz devamsızlık sayısı).
+5. Mini istatistik: aktif öğrenci sayısı, son 4 haftanın katılım oranı.
+
+Alt gezinme çubuğu (mobil): **Ekibim · Yoklamalar · Öğrenciler**.
+
+### 6.3 Lider — Yoklama Al (`/yoklama/yeni`, `/yoklama/[id]`)
+Bu ekran ürünün kalbidir. Bir yoklama telefonda **30 saniyenin altında** alınabilmelidir.
+- Üstte tarih (varsayılan bugün; ileri tarih seçilemez), altında etkinlik türü çipleri (çoklu seçim, plan varsa önceden seçili).
+- Öğrenci listesi: aktif ve sınırdaki öğrenciler, alfabetik (tr). Her satırda isim ve sağda **üç büyük segment butonu: Geldi · Gelmedi · Mazeret** (dokunma alanı ≥ 44px). Renkler §8'deki durum token'larından gelir.
+- "Mazeret" seçilince satırın altında tek satırlık not alanı açılır ("Düğünü var" gibi).
+- Liste üstünde "Tümünü Geldi işaretle" butonu var. Sonra sadece istisnalar değiştirilir.
+- Yapışkan alt çubuk: `Geldi 14 · Gelmedi 4 · Mazeret 2 · İşaretsiz 0` ve "Kaydet" butonu.
+- **Her dokunuş anında kaydedilir** (iyimser güncelleme + arka planda server action). Bağlantı koparsa değişiklikler kuyrukta tutulur, "Kaydedilmedi, tekrar deneniyor" göstergesi çıkar. Veri kaybı olmamalı.
+- "Buluşma ertelendi / iptal" seçeneği: `sessions.status` değişir, yoklama alınmaz. Excel'deki "Ertelendi" etkinlik türü yerine bu kullanılır.
+- Geçmiş yoklamalar düzenlenebilir (lider kendi ekibinde, admin hepsinde).
+- Ekip listesine eklenecek yeni bir öğrenci yoklama sırasında geldiyse: "Listede olmayan öğrenci ekle" → hızlı form (sadece ad soyad zorunlu), sonra yoklamaya eklenir.
+
+### 6.4 Lider — Öğrenciler (`/ogrenciler`, `/ogrenciler/[id]`)
+- Arama kutusu ve durum filtresi (Devam Ediyor / Sınırda / Çıkarıldı / Tümü).
+- Satır: ad soyad, okul, sınıf, katılım yüzdesi, durum rozeti.
+- **Tablo görünümü** düğmesi: Excel'e alışkın kullanıcılar için öğrenci × buluşma matrisi (salt okunur, renkli hücreler, yatay kaydırma, ilk sütun sabit). Liderler eski düzeni burada tanır.
+- Öğrenci detay sayfası: tüm alanlar. TC, telefon ve veli telefonu yanında **kopyala** butonu, telefonda `tel:` bağlantısı. Altında yoklama geçmişi ve katılım oranı.
+- Düzenleme formu: tüm alanlar. TC 11 hane ve checksum doğrulaması yapılır; geçersizse uyarı gösterilir ama kayda izin verilir. Telefon normalize edilir.
+- **Durum değiştirme**: menüden seçilir. `Çıkarıldı` için gerekçe zorunlu.
+- **Otomatik uyarı mantığı**: bir yoklama kaydedildiğinde, etkilenen öğrencinin dönem boyunca mazeretsiz devamsızlık sayısı `≥ absence_threshold` ise ve `status = active` ise `at_risk` yapılır, `status_reason = "Otomatik: N mazeretsiz devamsızlık"`. Sayı eşik altına düşerse (ör. yoklama düzeltildi) ve durum otomatik verilmişse `active`e döner. Bir insan `at_risk` öğrenciyi elle `active` yaparsa `status_locked = true` olur; kilit, öğrencinin bir sonraki yeni devamsızlığına kadar otomatik tetiklemeyi engeller. Bu mantık bir Postgres fonksiyonunda tek yerde yaşar ve birim testi olur.
+
+### 6.5 Yönetim — Genel Bakış (`/yonetim`)
+Masaüstünde sol kenar çubuğu, mobilde alt menü. İçerik:
+- **KPI şeridi**: aktif öğrenci · bu hafta katılım oranı (geçen haftaya göre ±) · bu hafta yoklaması girilen ekip sayısı (örn. 22/26) · devamsızlık sınırındaki öğrenci.
+- **"Bu hafta yoklama girilmedi"** listesi: buluşma günü geçmiş ama `session` kaydı olmayan ekipler (lider adı + gün).
+- **Haftalık katılım trendi** (çizgi grafik; tüm program, 10. ve 11. sınıf ayrı seriler).
+- **Ekipler tablosu**: ekip · lider · sınıf · gün · aktif öğrenci · son 4 hafta katılım (yüzde + mini sparkline) · sınırdaki öğrenci · son yoklama tarihi. Sıralanabilir, satıra tıklanınca ekip detayına gider.
+
+### 6.6 Yönetim — Ekip Detayı (`/yonetim/ekipler/[id]`)
+Liderin gördüğü her şey (salt okunur ya da admin için düzenlenebilir) ve ek analizler: haftalık katılım grafiği, etkinlik türlerine göre katılım, en çok ve en az katılan öğrenciler, katılan ve ayrılan öğrenci zaman çizelgesi, yaptığı etkinlik türleri.
+
+### 6.7 Yönetim — Raporlar (`/yonetim/raporlar`)
+- Üstte filtreler: **dönem** (Son hafta · Son 4 hafta · Son 3 ay · Tüm dönem · Özel aralık), sınıf (10/11), cinsiyet, gün, ekip.
+- Bölümler:
+  1. **Özet** (seçili döneme göre KPI'lar, önceki eşit dönemle kıyas).
+  2. **Ekip karşılaştırma**: katılım oranına göre sıralı yatay bar. Program ortalaması çizgisiyle.
+  3. **Trend**: haftalık katılım, mazeret ve mazeretsiz devamsızlık (yığılmış alan veya çizgi).
+  4. **Öğrenci sayısı değişimi**: haftalık aktif öğrenci, yeni katılan, çıkarılan.
+  5. **Etkinlik türleri**: türlere göre buluşma sayısı ve ortalama katılım (hangi etkinlik daha çok katılım getiriyor).
+  6. **Lider karnesi**: yoklamayı zamanında girme oranı, ekip büyüklüğü değişimi, katılım.
+- **Haftalık özet** görünümü: tek sayfalık, yazdırılabilir (print CSS), "PDF olarak kaydet" tarayıcı yazdırmasıyla yapılır.
+- Her grafik ve tablonun "Excel indir" butonu var.
+- Grafikler `dataviz` prensiplerine uyar: az renk, doğrudan etiket, gereksiz ızgara ve 3D yok.
+
+### 6.8 Yönetim — Sorgu Oluşturucu (`/yonetim/sorgu`)
+SQL bilmeyen biri için "filtrele, sütun seç, indir" akışı:
+1. **Filtreler** (eklenebilir satırlar, VE mantığı): ekip, sınıf seviyesi, cinsiyet, okul, öğrencinin sınıfı, durum, katılım oranı aralığı, mazeretsiz devamsızlık ≥ N, belirli bir etkinlik türüne katılmış / katılmamış, belirli bir tarihteki buluşmaya gelmiş, doğum tarihi aralığı, TC eksik / geçersiz, telefon eksik.
+2. **Sütunlar**: onay kutularıyla (ad soyad, TC, doğum tarihi, telefon, veli telefonu, okul, sınıf, okul no, ekip, lider, durum, katılım %, geldiği buluşma sayısı…). Sürükleyerek sıralanır.
+3. **Önizleme** tablosu (ilk 100 satır ve toplam sayı).
+4. **Excel indir** (.xlsx, Türkçe başlıklar, TC metin olarak yazılır, tarihler gerçek tarih hücresi olur).
+5. "Sorguyu kaydet" ile tekrar kullanılabilir şablonlar. Örnek hazır şablonlar: "Geziye katılacaklar için TC + doğum tarihi listesi", "Devamsızlık sınırındakiler ve veli numaraları".
+
+Filtreler sunucuda parametreli sorguya çevrilir. **Kullanıcıdan gelen metin asla SQL'e birleştirilmez.**
+
+### 6.9 Yönetim — Eşleştirme (`/yonetim/eslestirme`)
+Amaç: yönetimin haftalık "hangi ekip ne yapacak" kararını **kolaylaştırmak**. **Sistem sadece önerir, kararı yönetim verir.**
+
+**a) Geçmiş matrisi** (ana görünüm)
+- Satırlar ekipler (gün ve sınıfa göre gruplu), sütunlar rotasyondaki etkinlik türleri.
+- Hücrede o ekibin o etkinliği **kaç kez** yaptığı ve **en son ne zaman** yaptığı. Isı haritası renklendirmesi: hiç yapmadı = vurgulu, çok yaptı = soluk.
+- Kaynak: gerçekleşen `sessions` + `session_activity_types`. İsteğe bağlı olarak planlanan ama yapılmayanlar ayrıca işaretlenir.
+
+**b) Haftalık planlayıcı**
+- Hafta seçici (varsayılan: önümüzdeki hafta sonu).
+- O hafta için isteğe bağlı kapasite girişi ("Bowling: en fazla 4 ekip", "Havuz: 3 ekip").
+- "Tüm program ortak etkinlik" seçeneği: bir `program_event` oluşturur ve tüm ekiplere aynı etkinliği yazar (şenlik, büyük gezi).
+- Her ekip için bir satır: ekip · gün · **öneri** (soluk çip + kısa gerekçe, ör. "Bowling'i hiç yapmadı · Havuz'dan sonra 7 hafta geçti") · **seçim** (açılır liste, boş başlar).
+- "Önerileri forma aktar" butonu seçim alanlarını önerilerle doldurur. Yönetim istediğini değiştirir, sonra **"Planı kaydet"** butonuna basar. Kaydedilmemiş plan hiçbir yerde görünmez.
+- Kaydedilen plan liderin "Ekibim" ekranında "Bu hafta: …" olarak görünür ve yoklama formunda etkinlik türünü önceden seçer.
+
+**c) Öneri algoritması** (`lib/matching/suggest.ts`, saf fonksiyon, birim testli)
+- Girdi: ekipler, rotasyondaki etkinlik türleri, her ekip × tür için yapılma sayısı ve son tarih, o haftanın kapasiteleri, o hafta zaten kaydedilmiş planlar.
+- Her ekip × tür için skor:
+  `skor = A × (hedef_sayı − yapılma_sayısı) + B × min(son_yapılmadan_beri_hafta, 12) − C × (son 2 haftada yapıldıysa 1)`.
+  `hedef_sayı`, programdaki tüm ekiplerin o türü yapma ortalamasıdır. A, B ve C ayarlar sayfasından değiştirilebilir sabitlerdir (varsayılan 3, 1, 10).
+- Atama: kapasite sınırlarına uyan **açgözlü** atama. En yüksek skorlu (ekip, tür) çiftinden başlanır, ekip ve kapasite dolunca atlanır. Eşitlikte ekip adına göre sabit sıra izlenir (deterministik sonuç).
+- Çıktı: her ekip için 1 öneri ve 2 alternatif, her biri insan diliyle yazılmış gerekçeyle.
+- **Geçen yılın etkinlik dosyası** (§13) geldiğinde gerçek döngü örüntüsü buradan analiz edilecek ve skor ağırlıkları ile varsayılan döngü sırası buna göre ayarlanacak.
+
+**d) Plan ve gerçekleşen karşılaştırması**: geçmiş haftalarda plan ile liderin girdiği etkinlik türü farklıysa işaretlenir.
+
+### 6.10 Yönetim — Kullanıcılar (`/yonetim/kullanicilar`)
+- Davet ekle: e-posta + rol + (lider için) ekip + (koordinatör için) okullar.
+- Liste: kişi, rol, ekip, son giriş, aktif/pasif. Pasife alınan kullanıcının oturumu bir sonraki istekte düşer.
+
+### 6.11 Yönetim — Ayarlar (`/yonetim/ayarlar`)
+- Etkinlik türleri: ekle, yeniden adlandır, renk seç, sırala, rotasyona dahil et veya çıkar, pasifleştir (silme yok).
+- Devamsızlık eşiği.
+- Okul listesi (birleştirme dahil: "Hüsnü M. Özyeğin" ile "Hüsnü M.özyiğin" aynı okul).
+- Ekipler: ad, lider, sınıf, cinsiyet, buluşma günü.
+- Eşleştirme ağırlıkları (A, B, C).
+
+### 6.12 Yönetim — İçe Aktarma (`/yonetim/ice-aktar`)
+§9'daki sihirbaz.
+
+### 6.13 Yönetim — Kayıtlar (`/yonetim/kayitlar`)
+Denetim günlüğü: kim, ne zaman, neyi, nasıl değiştirdi. Filtrelenebilir.
+
+---
+
+## 7. Klasör Yapısı (öneri)
+
+```
+app/
+  (auth)/giris/page.tsx
+  (lider)/ekibim/ … yoklama/ … ogrenciler/ …
+  (yonetim)/yonetim/ … ekipler/ raporlar/ sorgu/ eslestirme/ kullanicilar/ ayarlar/ ice-aktar/ kayitlar/
+  api/…                     -- sadece gerekirse; tercih server actions
+components/ui/              -- shadcn bileşenleri
+components/…                -- uygulama bileşenleri (AttendanceRow, StatusBadge, KpiTile …)
+lib/
+  supabase/ (server.ts, client.ts, middleware.ts)
+  import/ (parse-workbook.ts, normalize.ts, tc.ts, dates.ts)   -- saf, test edilebilir
+  matching/suggest.ts
+  reports/queries.ts
+  export/xlsx.ts
+supabase/migrations/*.sql
+supabase/seed.sql           -- SADECE sahte veri
+scripts/seed-fake.ts        -- Türkçe sahte isimlerle 26 ekip × 15-25 öğrenci × 8 hafta yoklama
+tests/ (unit, e2e)
+```
+
+---
+
+## 8. Tasarım Dili
+
+**İlke: kurumsal, sakin, işlevsel. "Yapay zeka yapmış" izi olmayacak.**
+
+Yasaklar: gradyan arka planlar, parlayan veya bulanık efektler, emoji, "✨" ya da yıldız ikonları, her kartta renkli ikon kutusu, aşırı yuvarlak köşeler, büyük boş "hero" alanları, "Hoş geldin 👋" tarzı metinler, pastel gökkuşağı paletleri, gereksiz animasyon.
+
+Yapılacaklar:
+- Beyaz / çok açık gri zemin, ince 1px çizgiler, 6–8px köşe yarıçapı.
+- Tipografi: **Inter** (Türkçe karakter desteği tam), rakamlar `tabular-nums`. Başlıklar sade, gövde metni 14–16px.
+- Yoğun ama ferah tablolar (masaüstü). Mobilde kart listesi.
+- Renk yalnızca anlam taşır: durum renkleri ve marka vurgusu.
+- İkonlar: **lucide**, tek renk, 16–20px, sadece gerekli yerlerde.
+- Koyu mod: desteklenir (token tabanlı), ama varsayılan açık temadır.
+- Erişilebilirlik: kontrast WCAG AA. Durum asla sadece renkle anlatılmaz, her zaman metin veya ikon da bulunur. Klavye ile kullanılabilir.
+
+**Token'lar** (`app/globals.css` içinde CSS değişkenleri; marka gelince sadece `--brand*` değişir):
+
+```
+--brand:        #1F3A5F   /* geçici lacivert — Tayfa logosu gelince güncellenecek */
+--brand-fg:     #FFFFFF
+--bg:           #FFFFFF
+--surface:      #F7F8FA
+--border:       #E3E6EB
+--text:         #111827
+--text-muted:   #6B7280
+
+--present:      #1E7B4F   (zemin #E7F4EC)   /* Geldi */
+--absent:       #B42318   (zemin #FDECEA)   /* Gelmedi */
+--excused:      #B54708   (zemin #FEF3E2)   /* Mazeret */
+--at-risk:      #B54708
+--removed:      #6B7280
+```
+
+Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taşır (Liderlik açık mavi, Fotoğraf lila, Şenlik koyu kırmızı, Paintball koyu yeşil, Bowling koyu mavi…). Ayarlardan değiştirilebilir, ama her zaman sınırlı ve onaylı bir paletten seçilir.
+
+---
+
+## 9. Excel İçe Aktarma (tek seferlik geçiş)
+
+**Gerçek Excel dosyası ve öğrencilerin kişisel verileri asla repoya girmez.** `.gitignore` içinde `*.xlsx`, `*.xls`, `*.csv` bulunur. İçe aktarma, canlı sistemde admin panelinden yapılır. Dosya **tarayıcıda** SheetJS ile ayrıştırılır, sunucuya sadece temizlenmiş JSON gider ve dosya hiçbir yerde saklanmaz.
+
+### 9.1 Kaynak yapısı (`Tayfa Liderlik Programı 2026-2027 Yoklaması.xlsx`)
+- 28 sayfa. `Notlar ` (kullanım talimatı) ve `Şablon` atlanır. Kalan **26 sayfanın her biri bir ekip**.
+- Sayfa adı: `"<LİDER AD SOYAD> <10|11>"` → lider adı + sınıf seviyesi. (Bir sayfada yazım hatası var: "RÜMSEYSANUR".)
+- Satır 5–7 (`D` sütunu): Okul / Lider / Koordinatör Öğretmen. Çoğu boş, varsa öneri olarak kullanılır.
+- **Ana liste**: satır 9–33, sütunlar:
+  `A` sıra no · `B` Adı Soyadı · `C` Devam Durumu · `D` Telefon · `E` Okul · `F` Sınıfı · `G` TC Kimlik No · `H` Doğum Tarihi · `I` Veli Numarası · `J` Okul numarası · `K` Bilinç Atölyesi (**atla**).
+- **Yoklama sütunları**: `L`'den sağa doğru. Satır 7 = etkinlik türü, satır 8 = tarih, satır 9–33 = `Geldi | Gelmedi | Mazeret`. Satır 5'te "YOKLAMA", ilerideki bir sütunda "Notlar" başlığı vardır. İçeriği sadece `" "` olan sütunlar boş sayılır.
+- **Hücre notları (comment)** = mazeret açıklaması (toplam 32 adet, ör. "Düğünü varmış", "işte çalışıyor"). İlgili `attendance.excuse_note` alanına aktarılır. Sadece boşluk veya satır sonu içerenler atlanır.
+- **"Yeni Kayıt" bölümü**: satır 40 başlık, satır 41 sütun adları, satır 42+ veriler. Sütunlar `C` sıra · `D` Adı Soyadı · `E` İletişim · `F` TC · `G` Doğum Tarihi · `H` Okul · `I` Sınıf · `J` Okul No. Bunlar **sonradan katılan öğrencilerdir** ve ana listeyle birleştirilmelidir. 3 sayfada (Ceylin Irmak Üzüm, Ravzanur Kartal, Cihat Eren) ana liste tamamen boş, öğrenciler sadece burada.
+
+### 9.2 Bilinen veri sorunları ve kurallar
+| Sorun | Kural |
+|---|---|
+| TC hücresi tarih biçimli (Excel serisi olarak okunuyor, ör. `99332499514`) | Ham sayısal değeri al (`cell.v`), 11 haneli tam sayıya çevir. Biçimlendirilmiş metni kullanma. |
+| TC 11 hane değil veya checksum tutmuyor (ör. "58432606") | Aktar, `tc_valid = false`, raporda listele. |
+| Telefon biçimleri: `5515069537`, `0530 381 05 44`, `90 535 479 27 51`, `(501) 127 21 76` | Rakam dışını sil, baştaki `90` / `0` kaldırılır → 10 hane `5XXXXXXXXX`. 10 hane çıkmazsa ham hali korunur ve işaretlenir. |
+| Tarih yılı karışık: Şablon'daki `5 Ekim 2025` kopyalanmış; diğerleri 2026 | Program yılına göre düzelt: ay ≥ 9 → 2026, ay ≤ 8 → 2027. |
+| Tarih metin olarak yazılmış: `"13 EKİM"`, `"10 Ekim"` | Türkçe ay adlarıyla ayrıştır (büyük/küçük harf ve İ/ı duyarsız), yılı yukarıdaki kuralla ekle. |
+| Tarih boş ama yoklama verisi var | Sihirbazda o sütun "tarih eksik" olarak gösterilir. Admin tarihi girmeden aktarım tamamlanmaz. Öneri olarak o ekibin günüyle uyumlu en yakın hafta sonu sunulur. |
+| Etkinlik türü yazımları: `"Fotoğraf "` (sonda boşluk), `"Fotoğraf, Liderlik"` | Virgülle böl, kırp, Türkçe büyük/küçük harf duyarsız eşleştir. Birden çok tür → çoklu etiket. Eşleşmeyen tür → sihirbazda eşleme ekranı. |
+| Etkinlik türü var, tarih yok, hiç yoklama yok (şablondan kalma boş sütunlar) | Atla. |
+| Doğum tarihi metin: `"23.8.2011"`, `"10/08/2011"`, `"14.1.2011"` | `d.M.yyyy` ve `dd/MM/yyyy` dene. Başarısızsa boş bırak ve işaretle. |
+| Durum: `Devam Ediyor`, `devam`, boş, `" "` | → `active`. `Devamsızlık Sınırında` → `at_risk`. `Çıkarıldı` → `removed`. |
+| Okul adı varyasyonları: "Hüsnü M. Özyeğin Anadolu Lisesi", "Hüsnü M.özyiğin", "Hüsnü M. Özyeğ" | Normalize et (küçük harf, tr, noktalama ve boşluk temizliği). Benzer adları (prefix / Levenshtein) gruplayıp admin onayına sun. Onaylananlar tek `school` olur. |
+| Sınıf sütununda okul adı veya karışık değer (ör. sınıf "10/A" okul sütununda) | Ham değeri `class_label` / `school_raw` alanlarına olduğu gibi aktar, raporla. Sihirbaz bunları tahminle düzeltmez. |
+| Ad soyad büyük/küçük harf karışık ("MUHAMMET ALİ İDEKÇİ", "haktan alim") | Türkçe kurallarla "Başlık Düzeni"ne çevir (`İ/ı` doğru). Orijinali audit diff'inde kalır. |
+| Ana liste ve Yeni Kayıt'ta aynı kişi | Önce geçerli TC ile, yoksa normalize ad soyad ile eşleştir. Eşleşenler birleştirilir (boş alanlar diğerinden doldurulur, çakışan değerler raporlanır). Eşleşmeyen Yeni Kayıt satırları `source = excel_new_registration` ile yeni öğrenci olur. |
+
+### 9.3 Sihirbaz adımları
+1. **Dosya seç** → tarayıcıda ayrıştır.
+2. **Ekipler**: 26 sayfa listelenir. Her biri için lider adı ve sınıf (sayfa adından) gösterilir; admin **cinsiyet** ve **buluşma günü** girer (toplu seçim mümkün) ve lider e-postasını ekler (bu adım lider davetini de oluşturur; boş bırakılabilir).
+3. **Okul eşleme**: bulunan okul adı grupları, birleştirme onayı.
+4. **Etkinlik türü eşleme** + **eksik tarihler**.
+5. **Kuru çalıştırma raporu**: ekip başına öğrenci sayısı, buluşma sayısı, yoklama sayısı ve tüm uyarılar (geçersiz TC, normalize edilemeyen telefon, birleşen ve çakışan kayıtlar). Uyarılar CSV olarak indirilebilir.
+6. **Onayla ve aktar**: tek transaction. Hata olursa hiçbir şey yazılmaz. Sonuç ekranı ve `audit_log` içinde `import` kaydı.
+7. Aktarım **idempotent** olmalı: aynı dosya tekrar yüklenirse kopya oluşmaz (ekip = sayfa adı, öğrenci = TC veya ad+ekip, session = ekip+tarih anahtarlarıyla upsert).
+
+Parser (`lib/import/*`) saf TypeScript olmalı ve **sahte bir test workbook'uyla** (testte programatik üretilir, aynı düzen ve aynı kirli veri örnekleriyle) birim testine tabi tutulmalıdır.
+
+---
+
+## 10. Kişisel Verilerin Korunması
+
+- Veri: reşit olmayan öğrencilerin TC, doğum tarihi, telefon ve veli telefonu. KVKK kapsamında dikkatle işlenir.
+- Supabase Frankfurt bölgesinde (AB). Yurt dışı aktarım ve aydınlatma metni gibi hukuki yükümlülükler **belediyenin** sorumluluğundadır. Uygulama altbilgisinde "Kişisel Verilerin Korunması" sayfası için yer bırakılır (metin belediyeden gelecek).
+- Gerçek veri **asla** repoya, loglara, hata izleme servisine, test fixture'larına veya ekran görüntüsü olarak issue'lara girmez. Geliştirme ve önizleme ortamları sadece sahte veriyle çalışır.
+- RLS her tabloda açık. RLS politikaları için ayrı testler var: lider A, ekip B'nin öğrencisini **okuyamaz ve yazamaz**.
+- `service_role` anahtarı istemci paketine asla girmez (`NEXT_PUBLIC_` ile başlamaz).
+- Excel dışa aktarımları `audit_log` içine yazılır (kim, hangi sorguyla, kaç satır).
+- `robots.txt`: tüm siteyi indekslemeye kapat. Giriş sayfası dışında her şey oturum ister.
+
+---
+
+## 11. Yol Haritası
+
+### Faz 0 — Kurulum (kullanıcıyla birlikte, ilk oturum)
+Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
+1. **Supabase**: supabase.com'da hesap → yeni proje, bölge **Frankfurt** → Project URL, `anon` ve `service_role` anahtarlarını al.
+2. **Google OAuth**: Google Cloud Console'da proje → OAuth onay ekranı (External, uygulama adı "Tayfa Yoklama") → OAuth Client ID (Web) → yetkili yönlendirme URI'si olarak Supabase'in verdiği callback adresi → Client ID ve Secret'ı Supabase › Authentication › Providers › Google'a gir.
+3. **Vercel**: GitHub reposunu (`affanbugra/tayfa`) bağla → ortam değişkenlerini gir → deploy. Ardından Supabase › Auth › URL Configuration kısmına Vercel adresini ekle.
+4. `.env.example` dosyası tüm değişkenleri açıklamalarıyla listeler.
+
+### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
+- [ ] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
+- [ ] Şema + RLS + trigger'lar + seed (sadece sahte veri) + ilk admin daveti
+- [ ] Google girişi + davet listesi kontrolü + role göre yönlendirme
+- [ ] Lider: Ekibim, Yoklama Al (anında kayıt, çevrimdışı kuyruk), Yoklamalar listesi, Öğrenciler (liste, detay, ekle, düzenle, durum), tablo/matris görünümü
+- [ ] Otomatik "Devamsızlık Sınırında" mantığı
+- [ ] Ekip Excel'i indirme
+- [ ] Yönetim: Genel Bakış (KPI, yoklama girilmeyenler, ekipler tablosu), ekip detayı (temel), Kullanıcılar, Ayarlar (etkinlik türleri, eşik, ekipler, okullar)
+- [ ] **İçe aktarma sihirbazı** (gerçek veri canlıda yüklenir)
+- [ ] PWA manifest + ikon
+- [ ] Playwright: "lider girer → yoklama alır → yönetim görür" akışı; RLS testleri
+
+### Faz 2 — Raporlar ve Sorgu
+- [ ] Raporlar sayfası (tüm bölümler, dönem filtreleri, yazdırılabilir haftalık özet)
+- [ ] Sorgu oluşturucu + kayıtlı sorgular + hazır şablonlar
+- [ ] Denetim kaydı ekranı
+
+### Faz 3 — Eşleştirme
+- [ ] Geçmiş matrisi (ısı haritası)
+- [ ] Haftalık planlayıcı, kapasite, ortak program etkinliği
+- [ ] Öneri algoritması + gerekçeler + birim testleri
+- [ ] Planın lider ekranına ve yoklama formuna yansıması, plan ve gerçekleşen karşılaştırması
+- [ ] Geçen yılın verisiyle ağırlık ve döngü ayarı (§13)
+
+### Faz 4 — Cila
+- [ ] Logo ve marka renkleri, boş durum ekranları, yükleme iskeletleri
+- [ ] Performans (430 öğrenci küçük ölçek, ama rapor sorguları için index ve materialized view gerekirse)
+- [ ] Kullanım kılavuzu: lider için tek sayfalık "nasıl yoklama alırım" (ekran görüntülü, sahte veriyle)
+
+---
+
+## 12. Çalışma Kuralları (Claude için)
+
+- Her faz sonunda: `pnpm lint`, `pnpm typecheck`, `pnpm test` ve kritik e2e testleri yeşil olmalı. Sonra Vercel önizleme adresini kullanıcıya ver.
+- Küçük, anlamlı commit'ler at. Commit mesajları Türkçe veya İngilizce olabilir ama tutarlı olmalı.
+- UI metinlerini bileşenlerin içine dağıtma, `lib/i18n/tr.ts` içinde topla (tek dil, ama tek yerde).
+- Tüm sorgular sunucuda çalışır. İstemciye sadece ekranın ihtiyaç duyduğu veri gider.
+- Bu dosyadaki bir kararı değiştirmen gerekirse önce kullanıcıya sor, onay gelince bu dosyayı güncelle.
+- Kullanıcıdan gerçek veri, ekran görüntüsü veya Excel istenirse bunları **sadece analiz için** kullan. Repoya koyma, koda gömme.
+- Bilmediğin bir iş kuralına rastlarsan tahmin etme: §13'e ekle ve kullanıcıya sor.
+
+---
+
+## 13. Bekleyen Konular
+
+| # | Konu | Durum |
+|---|---|---|
+| 1 | **Geçen yılın (2025–2026) etkinlik dosyası**: eşleştirme döngüsünün gerçek örüntüsünü (hangi tür hangi sıklıkta, hangi ekip hangi gün, ortak günler) analiz etmek için. | Kullanıcı gönderecek. Gelince §6.9 güncellenecek. |
+| 2 | **Tayfa / Esenler Gençlik Spor logosu** (SVG veya yüksek çözünürlüklü PNG) ve varsa kurumsal renk kodları. | Kullanıcı gönderecek. Gelince §8 token'ları güncellenecek. |
+| 3 | İlk admin e-postası `affanbugraozaytas@gmail.com` mi? | Teyit bekleniyor. |
+| 4 | KVKK aydınlatma metni. | Belediyeden gelecek. O zamana kadar boş sayfa. |
