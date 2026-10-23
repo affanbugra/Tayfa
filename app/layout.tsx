@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: tr.appName,
   description: tr.appDescription,
   robots: { index: false, follow: false },
-  icons: { icon: "/brand/tayfa-logo-square.png", apple: "/brand/tayfa-logo-square.png" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-180.png" },
 };
 
 export const viewport: Viewport = {

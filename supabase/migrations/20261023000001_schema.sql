@@ -297,7 +297,7 @@ create trigger guard_team_update before update on public.teams
   for each row execute function public.guard_team_update();
 
 -- Davetten profile: Google ile ilk girişte e-posta davet listesinde varsa profil açılır.
-create or replace function public.accept_invitation() returns public.profiles
+create or replace function public.accept_invitation(p_full_name text default null) returns public.profiles
 language plpgsql security definer set search_path = public as $$
 declare
   uemail text;
@@ -308,12 +308,14 @@ begin
   if uemail is null then return null; end if;
   select * into prof from profiles where id = auth.uid();
   if found then
-    update profiles set last_seen_at = now() where id = auth.uid() returning * into prof;
+    update profiles set last_seen_at = now(), full_name = coalesce(full_name, p_full_name)
+      where id = auth.uid() returning * into prof;
     return prof;
   end if;
   select * into inv from invitations where email = uemail;
   if not found then return null; end if;
-  insert into profiles (id, email, role) values (auth.uid(), uemail, inv.role) returning * into prof;
+  insert into profiles (id, email, role, full_name, last_seen_at)
+    values (auth.uid(), uemail, inv.role, p_full_name, now()) returning * into prof;
   update invitations set accepted_at = now() where id = inv.id;
   if inv.role = 'leader' and inv.team_id is not null then
     update teams set leader_id = auth.uid() where id = inv.team_id and leader_id is null;
@@ -403,4 +405,12 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
 revoke insert, update, delete on public.audit_log from authenticated;
-grant execute on function public.accept_invitation() to authenticated;
+grant execute on function public.accept_invitation(text) to authenticated;
+
+-- Excel dışa aktarımları denetim kaydına yazılır (kim, ne, kaç satır). Kullanıcı audit_log'a doğrudan yazamaz.
+create or replace function public.log_export(p_entity text, p_entity_id text, p_diff jsonb) returns void
+language sql security definer set search_path = public as $$
+  insert into audit_log (actor_id, action, entity, entity_id, diff) values (auth.uid(), 'export', p_entity, p_entity_id, p_diff);
+$$;
+revoke execute on function public.log_export(text, text, jsonb) from public;
+grant execute on function public.log_export(text, text, jsonb) to authenticated;

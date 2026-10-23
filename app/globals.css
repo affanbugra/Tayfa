@@ -62,7 +62,6 @@
   --color-excused-bg: var(--excused-bg);
   --color-at-risk: var(--at-risk);
   --color-removed: var(--removed);
-  --radius-DEFAULT: var(--radius);
   --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-display: "Nunito Sans Variable", "Inter Variable", sans-serif;
 }

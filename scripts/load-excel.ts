@@ -109,6 +109,12 @@ async function write(sql: postgres.Sql, plan: LoadPlan) {
       }
     }
 
+    // İlk yöneticiler (CLAUDE.md §4)
+    const admins = (process.env.INITIAL_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    for (const email of admins) {
+      await tx`insert into public.invitations (email, role) values (${email}, 'admin') on conflict (email) do nothing`;
+    }
+
     await tx`insert into public.audit_log (action, entity, diff) values ('import', 'excel', ${tx.json(plan.stats)})`;
   });
 }

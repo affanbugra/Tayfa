@@ -74,6 +74,8 @@ görünümlü bir web uygulaması.
 - **Next.js 15** (App Router, Server Components, Server Actions) + **TypeScript (strict)**
 - **Tailwind CSS** + **shadcn/ui** (Radix tabanlı). Bileşenler §8'deki tasarım diline göre sadeleştirilir.
 - **Supabase**: Postgres, Auth (Google provider), Row Level Security. `@supabase/ssr` ile oturum.
+- **Veri erişimi**: uygulama veritabanına `postgres` paketiyle doğrudan bağlanır (`DATABASE_URL`, Supabase transaction pooler). Her istek `lib/db.ts › asUser` ile kullanıcının kimliği ve `authenticated` rolüyle bir transaction içinde çalışır, böylece RLS her sorguda devrededir. Supabase'den sadece Google girişi kullanılır; Türkiye'ye taşınırken yalnızca kimlik doğrulama katmanı değişir.
+- **Yerel geliştirme**: `tests/db/reset.sh` düz Postgres'te Supabase taklidiyle şemayı kurar, `pnpm seed:fake` sahte veri yükler, `DEV_AUTH=1` (sadece development) e-postayla giriş sağlar.
 - **SQL migration dosyaları** (`supabase/migrations/*.sql`), ORM yok. RLS, trigger ve fonksiyonlar zaten SQL; tek şema kaynağı olsun. TypeScript tipleri `supabase gen types` ile üretilir. Şema panelden elle değiştirilmez.
 - **Zod**: tüm form ve server action girdilerinin doğrulaması.
 - **TanStack Table**: öğrenci listesi, matris görünümü, sorgu önizlemesi.
@@ -497,15 +499,15 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 4. `.env.example` dosyası tüm değişkenleri açıklamalarıyla listeler.
 
 ### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
-- [ ] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
-- [ ] Şema + RLS + trigger'lar + seed (sadece sahte veri) + ilk admin daveti
-- [ ] Google girişi + davet listesi kontrolü + role göre yönlendirme
-- [ ] Lider: Ekibim, Yoklama Al (anında kayıt, hata olursa tekrar dene), Yoklamalar listesi, Öğrenciler (liste, detay, ekle, düzenle, durum), tablo/matris görünümü
-- [ ] Ekip Excel'i indirme
-- [ ] Yönetim: Genel Bakış (KPI, yoklama girilmeyenler, ekipler tablosu), ekip detayı (temel), Kullanıcılar, Ayarlar (etkinlik türleri, ekipler, okullar)
-- [ ] **Mevcut verinin yüklenmesi** (`scripts/load-excel.ts`, canlıya çıkmadan önce)
-- [ ] PWA manifest + ikon
-- [ ] Playwright: "lider girer → yoklama alır → yönetim görür" akışı; RLS testleri
+- [x] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
+- [x] Şema + RLS + trigger'lar + seed (sadece sahte veri) + ilk admin daveti
+- [x] Google girişi + davet listesi kontrolü + role göre yönlendirme
+- [x] Lider: Ekibim, Yoklama Al (anında kayıt, hata olursa tekrar dene), Yoklamalar listesi, Öğrenciler (liste, detay, ekle, düzenle, durum), tablo/matris görünümü
+- [x] Ekip Excel'i indirme
+- [x] Yönetim: Genel Bakış (KPI, yoklama girilmeyenler, ekipler tablosu), ekip detayı (temel), Kullanıcılar, Ayarlar (etkinlik türleri, ekipler, okullar)
+- [ ] **Mevcut verinin yüklenmesi** (`scripts/load-excel.ts` hazır ve yerelde gerçek dosyayla doğrulandı; canlı veritabanına yükleme Faz 0 bitince)
+- [x] PWA manifest + ikon
+- [x] Playwright: "lider girer → yoklama alır → yönetim görür" akışı; RLS testleri
 
 ### Faz 2 — Raporlar ve Sorgu
 - [ ] Raporlar sayfası (tüm bölümler, dönem filtreleri, yazdırılabilir haftalık özet)

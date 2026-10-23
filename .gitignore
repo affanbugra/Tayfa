@@ -9,3 +9,5 @@ node_modules/
 next-env.d.ts
 coverage/
 .vercel
+test-results/
+playwright-report/
