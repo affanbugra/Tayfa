@@ -383,7 +383,7 @@ Yasaklar: gradyan arka planlar, parlayan veya bulanık efektler, emoji, "✨" ya
 
 Yapılacaklar:
 - Beyaz / çok açık gri zemin, ince 1px çizgiler, 8px köşe yarıçapı (logonun yuvarlak karakterine uyumlu, ama "balon" kadar yuvarlak değil).
-- Tipografi: arayüzde **Inter** (Türkçe karakter desteği tam), rakamlar `tabular-nums`. Sayfa başlıkları ve KPI rakamları için logonun geometrik yuvarlak karakterine yakın **Nunito Sans** ya da **Poppins** (600) kullanılabilir. İkisinden biri seçilir, en fazla iki font ailesi olur.
+- Tipografi: arayüzde **Inter** (Türkçe karakter desteği tam; `@fontsource-variable` paketiyle uygulamanın içinden sunulur, Google'a istek gitmez), rakamlar `tabular-nums`. Sayfa başlıkları ve KPI rakamları için logonun geometrik yuvarlak karakterine yakın **Nunito Sans** ya da **Poppins** (600) kullanılabilir. İkisinden biri seçilir, en fazla iki font ailesi olur.
 - Yoğun ama ferah tablolar (masaüstü). Mobilde kart listesi.
 - Renk yalnızca anlam taşır: durum renkleri ve marka vurgusu. Sayfanın geneli beyaz ve gri kalır. Turkuaz yüzeyler sadece giriş ekranı ve başlık bandında kullanılır, her kart turkuaz olmaz.
 - İkonlar: **lucide**, tek renk, 16–20px, sadece gerekli yerlerde.
@@ -554,3 +554,4 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 | 6 | Yedekleme (Supabase ücretsiz planında otomatik yedek yok). | Bekliyor. Öneri: Pro plan, ya da admin panelinde "tüm veriyi Excel olarak indir" yedeği. |
 | 7 | Şenlik'in gerçek tarihi (Excel'de şablondan kalan 4/5 Ekim 2025 yazıyor). | Bekliyor. Sihirbazda da sorulabilir. |
 | 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | Bekliyor. Sihirbaz bunları ayrı listeler, admin onaylar. |
+| 9 | SheetJS sürümü. | npm'deki `xlsx@0.18.5` eski ve bilinen açıkları var (dosya ayrıştırmada). Geliştirme ortamı `cdn.sheetjs.com`'a erişemediği için geçici olarak bu sürüm kullanılıyor; Vercel'e çıkmadan önce `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` ile değiştirilir. |

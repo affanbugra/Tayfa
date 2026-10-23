@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Tasarım token'ları — CLAUDE.md §8 */
+:root {
+  --brand: #4bbacd;
+  --brand-strong: #17788a;
+  --brand-deep: #0f5a68;
+  --brand-tint: #e8f6f9;
+  --brand-fg: #ffffff;
+  --accent: #fbc52f;
+  --accent-tint: #fef6dc;
+
+  --bg: #ffffff;
+  --surface: #f6f8f9;
+  --border: #e1e7ea;
+  --text: #111827;
+  --text-muted: #5f6b73;
+
+  --present: #1e7b4f;
+  --present-bg: #e7f4ec;
+  --absent: #b42318;
+  --absent-bg: #fdecea;
+  --excused: #b54708;
+  --excused-bg: #fef3e2;
+  --at-risk: #b54708;
+  --removed: #6b7280;
+
+  --radius: 8px;
+}
+
+:root[data-theme="dark"] {
+  --brand-strong: #4bbacd;
+  --brand-tint: #16323a;
+  --bg: #0f1416;
+  --surface: #172024;
+  --border: #26333a;
+  --text: #e8eef0;
+  --text-muted: #9aa8af;
+  --present-bg: #12291e;
+  --absent-bg: #33171a;
+  --excused-bg: #33230f;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-fg: var(--brand-fg);
+  --color-accent: var(--accent);
+  --color-accent-tint: var(--accent-tint);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-present: var(--present);
+  --color-present-bg: var(--present-bg);
+  --color-absent: var(--absent);
+  --color-absent-bg: var(--absent-bg);
+  --color-excused: var(--excused);
+  --color-excused-bg: var(--excused-bg);
+  --color-at-risk: var(--at-risk);
+  --color-removed: var(--removed);
+  --radius-DEFAULT: var(--radius);
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-display: "Nunito Sans Variable", "Inter Variable", sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter Variable", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+}
