@@ -57,7 +57,10 @@ görünümlü bir web uygulaması.
 | Cinsiyet | Ekipler cinsiyete göre ayrılır. Ekibin `gender` alanı vardır (K / E). |
 | Bilinç Atölyesi sütunu | Kaldırılır, aktarılmaz. |
 | Excel'den geçiş | **Tek seferlik aktarım.** Sonrasında Excel arşiv olarak kalır. Sistemden her zaman Excel indirilebilir. |
-| Eşleştirme | Sistem **önerir**, karar **yönetimin** elindedir. Sistem hiçbir ekibe kendiliğinden etkinlik atamaz. Yönetim önerileri tek tıkla forma alabilir ama kaydetmek her zaman elle yapılan bir onaydır. |
+| Eşleştirme | Sistem **önerir**, karar **yönetimin** elindedir. Sistem hiçbir ekibe kendiliğinden etkinlik atamaz. Yönetim önerileri tek tıkla forma alabilir ama kaydetmek her zaman elle yapılan bir onaydır. Önerinin amacı **adalettir**: her ekip her rotasyon etkinliğini eşit sayıda yapmalı (havuza hiç gitmeyen havuza; herkes 3 kez yapmışken 2'de kalan o etkinliğe). "Kim neyi kaç kez yaptı" **görsel matrisi** zorunludur. |
+| Haftalık döngü | Genel kalıp **Liderlik → Rotasyon → Rotasyon** (§6.9). Liderlik / Şenlik / Kamp gibi haftalar **ortak** (tüm ekipler aynı), rotasyon haftalarında ekipler kontenjanlı etkinliklere dağıtılır. Döngü varsayılandır, yönetim her haftanın tipini değiştirebilir. Her ekibin buluşma günü genelde sabittir. |
+| Geçen yıl verisi | **Kullanılmaz.** Eşleştirme sıfırdan, sadece 2026–2027 verisiyle başlar. Geçen yılın dosyası sadece iş kurallarını anlamak için analiz edildi (§6.9). |
+| Ön teyit | **Yok.** "Gelecek / Haber Verecek / Ulaşamadım" gibi etkinlik öncesi durumlar eklenmez. Yoklama sadece Geldi / Gelmedi / Mazeret. |
 | Bildirimler | Şimdilik **yok** (e-posta da push da yok). Panelde görsel uyarılar var (ör. "bu hafta yoklama girilmedi"). |
 | Cihaz | **Telefon öncelikli.** Yoklama ekranı tek elle kullanılabilir. Yönetim raporları masaüstünde de rahat okunur. PWA olarak ana ekrana eklenebilir. |
 | Tasarım | **Tayfa / Esenler Gençlik Spor kurumsal kimliği.** Logo ve renkler bekleniyor (§13). Gelene kadar §8'deki nötr token'lar kullanılır; logo gelince sadece token'lar değişir. |
@@ -167,12 +170,19 @@ attendance
 program_events      -- şenlik, büyük gezi gibi tüm program çapında etkinlikler
   name, date, activity_type_id
 
+program_weeks       -- program takvimi: her hafta sonunun tipi
+  week_start date unique (cumartesi), type (common|rotation|break),
+  common_activity_type_id null      -- type=common ise herkesin yapacağı tür (Liderlik, Şenlik, Kamp…)
+  label text null                   -- type=break için "Dönem Arası", "Bayram", "Ramazan Kampı" gibi
+  note
+
 plan_entries        -- eşleştirme planı (yönetimin onayladığı)
   week_start date (o haftanın cumartesisi), team_id, activity_type_id, planned_date date null,
   note, created_by, unique (week_start, team_id, activity_type_id)
 
-activity_capacity   -- isteğe bağlı: o hafta sonu bir etkinliğe en fazla kaç ekip gidebilir
+activity_capacity   -- o hafta sonu bir etkinliğe en fazla kaç ekip gidebilir
   week_start, activity_type_id, max_teams
+  -- haftaya özel kayıt yoksa activity_types.default_capacity kullanılır (activity_types'a bu sütun eklenir)
 
 settings            -- tek satır
   absence_threshold int default 3, program_start date default '2026-09-01', program_end date default '2027-06-30'
@@ -266,42 +276,63 @@ SQL bilmeyen biri için "filtrele, sütun seç, indir" akışı:
 Filtreler sunucuda parametreli sorguya çevrilir. **Kullanıcıdan gelen metin asla SQL'e birleştirilmez.**
 
 ### 6.9 Yönetim — Eşleştirme (`/yonetim/eslestirme`)
-Amaç: yönetimin haftalık "hangi ekip ne yapacak" kararını **kolaylaştırmak**. **Sistem sadece önerir, kararı yönetim verir.**
+Amaç: yönetimin haftalık "hangi ekip ne yapacak" kararını **kolaylaştırmak** ve ekipler arasında **adaleti** sağlamak. **Sistem sadece önerir, nihai eşleştirmeyi yönetim elle yapar.**
 
-**a) Geçmiş matrisi** (ana görünüm)
-- Satırlar ekipler (gün ve sınıfa göre gruplu), sütunlar rotasyondaki etkinlik türleri.
-- Hücrede o ekibin o etkinliği **kaç kez** yaptığı ve **en son ne zaman** yaptığı. Isı haritası renklendirmesi: hiç yapmadı = vurgulu, çok yaptı = soluk.
-- Kaynak: gerçekleşen `sessions` + `session_activity_types`. İsteğe bağlı olarak planlanan ama yapılmayanlar ayrıca işaretlenir.
+**Geçen yılın (2025–2026) analizinden çıkan iş kuralları** (34 sayfa, yaklaşık 900 buluşma incelendi; bu veri sisteme **aktarılmaz**):
+- **Döngü:** Program **Liderlik → Rotasyon → Rotasyon** kalıbıyla ilerliyor. Örnek: 18 Eki Liderlik, 25 Eki ve 1 Kas rotasyon, 8 Kas Liderlik, 29 Kas ve 6 Ara rotasyon, 13 Ara Liderlik…
+- **Ortak haftalar:** Liderlik haftalarında ekiplerin neredeyse tamamı Liderlik yapıyor. Program açılışı ve kapanışında **Şenlik** var (4 Eki, 16 May). Ara ara Kamp, Konferans ya da ortak Film/Belgesel haftası oluyor.
+- **Rotasyon haftaları:** Ekipler kontenjanlı etkinliklere dağıtılıyor. Bir hafta sonunda tipik dağılım: Bowling 3–5, Paintball 3–4, Havuz 2–3, Fotoğraf 2–4, Workshop 2–6, Stüdyo/Reels 2–4, Sosyal Sorumluluk 1–6, Sunum 1–5, Kitap Tahlili 2–3, Film Tahlili 1–4 ekip. Bu sayılar `activity_types.default_capacity` için başlangıç değeridir.
+- **Ara haftalar:** Dönem arası, Ramazan kampı, bayram gibi haftalarda buluşma yok.
+- **Günler sabit:** Çoğu ekip yılın %80'inden fazlasında aynı günde (cumartesi ya da pazar) buluşmuş. Ara sıra "pazara alındı" gibi kaymalar oluyor. Bu yüzden ekip günü varsayılandır, ama buluşma her tarihe açılabilir.
+- **Dengesizlik (çözülecek asıl sorun):** Yıl boyunca 15'ten fazla buluşma yapan 24 ekipten **11'i hiç Havuz'a gitmemiş, 13'ü hiç Kitap Tahlili yapmamış, 7'si hiç Fotoğraf yapmamış, 6'sı hiç Paintball'a gitmemiş.** Buna karşılık bazı ekipler Workshop'a 4, Bowling'e 3 kez gitmiş. Eşleştirme ekranı bunu görünür kılmalı ve öneriler bunu düzeltmeye çalışmalı.
 
-**b) Haftalık planlayıcı**
-- Hafta seçici (varsayılan: önümüzdeki hafta sonu).
-- O hafta için isteğe bağlı kapasite girişi ("Bowling: en fazla 4 ekip", "Havuz: 3 ekip").
-- "Tüm program ortak etkinlik" seçeneği: bir `program_event` oluşturur ve tüm ekiplere aynı etkinliği yazar (şenlik, büyük gezi).
-- Her ekip için bir satır: ekip · gün · **öneri** (soluk çip + kısa gerekçe, ör. "Bowling'i hiç yapmadı · Havuz'dan sonra 7 hafta geçti") · **seçim** (açılır liste, boş başlar).
-- "Önerileri forma aktar" butonu seçim alanlarını önerilerle doldurur. Yönetim istediğini değiştirir, sonra **"Planı kaydet"** butonuna basar. Kaydedilmemiş plan hiçbir yerde görünmez.
-- Kaydedilen plan liderin "Ekibim" ekranında "Bu hafta: …" olarak görünür ve yoklama formunda etkinlik türünü önceden seçer.
+**a) Etkinlik dağılım matrisi** (ana görünüm, en önemli parça)
+- Satırlar ekipler (gün ve sınıfa göre gruplu), sütunlar **rotasyondaki** etkinlik türleri. Ayrıca Liderlik ve ortak etkinlik sayısı için soluk bir özet sütunu.
+- Hücrede o ekibin o etkinliği **kaç kez** yaptığı. Üzerine gelince (mobilde dokununca) yapıldığı tarihler görünür.
+- Renk **o sütunun ortalamasına göre**: hiç yapmadı = belirgin vurgu (en koyu), ortalamanın altında = orta, ortalamada = nötr, ortalamanın üstünde = soluk. Böylece "Havuz sütununda kim geride" tek bakışta görülür.
+- Satır sonunda ekibin **denge skoru** (yaptığı rotasyon türlerinin ortalamaya göre sapması). Sütun altında her türün program ortalaması ve "hiç yapmayan ekip sayısı" yazar.
+- Filtreler: sınıf, gün, cinsiyet. Matris Excel olarak indirilebilir.
+- Kaynak: sadece gerçekleşen (`status = held`) `sessions` + `session_activity_types`. Planlanıp yapılmayanlar sayılmaz.
 
-**c) Öneri algoritması** (`lib/matching/suggest.ts`, saf fonksiyon, birim testli)
-- Girdi: ekipler, rotasyondaki etkinlik türleri, her ekip × tür için yapılma sayısı ve son tarih, o haftanın kapasiteleri, o hafta zaten kaydedilmiş planlar.
-- Her ekip × tür için skor:
-  `skor = A × (hedef_sayı − yapılma_sayısı) + B × min(son_yapılmadan_beri_hafta, 12) − C × (son 2 haftada yapıldıysa 1)`.
-  `hedef_sayı`, programdaki tüm ekiplerin o türü yapma ortalamasıdır. A, B ve C ayarlar sayfasından değiştirilebilir sabitlerdir (varsayılan 3, 1, 10).
-- Atama: kapasite sınırlarına uyan **açgözlü** atama. En yüksek skorlu (ekip, tür) çiftinden başlanır, ekip ve kapasite dolunca atlanır. Eşitlikte ekip adına göre sabit sıra izlenir (deterministik sonuç).
-- Çıktı: her ekip için 1 öneri ve 2 alternatif, her biri insan diliyle yazılmış gerekçeyle.
-- **Geçen yılın etkinlik dosyası** (§13) geldiğinde gerçek döngü örüntüsü buradan analiz edilecek ve skor ağırlıkları ile varsayılan döngü sırası buna göre ayarlanacak.
+**b) Program takvimi**
+- Dönemin tüm hafta sonları bir şeritte gösterilir. Her haftanın tipi var: **Ortak** (tür seçilir: Liderlik, Şenlik, Kamp…), **Rotasyon** veya **Ara** (etiketli: Dönem Arası, Bayram…).
+- "Döngüyü uygula" butonu: seçilen başlangıç haftasından itibaren boş haftaları Liderlik → Rotasyon → Rotasyon kalıbıyla **taslak** olarak doldurur. Yönetim haftaları tek tek değiştirir ve kaydeder. Mevcut kayıtların üzerine yazılmaz.
 
-**d) Plan ve gerçekleşen karşılaştırması**: geçmiş haftalarda plan ile liderin girdiği etkinlik türü farklıysa işaretlenir.
+**c) Haftalık planlayıcı**
+- Hafta seçici (varsayılan: önümüzdeki hafta sonu). Haftanın tipi üstte görünür.
+- **Ortak hafta:** tek tıkla tüm aktif ekiplere aynı tür yazılır (yine "Planı kaydet" onayıyla).
+- **Rotasyon haftası:**
+  - Üstte o haftanın kontenjanları (varsayılanlar `default_capacity`'den gelir, haftaya özel değiştirilebilir, ör. "Havuz bu hafta 0 — kapalı").
+  - Her ekip için bir satır: ekip · gün · **öneri** (soluk çip + kısa gerekçe, ör. "Havuz'a hiç gitmedi", "Bowling: ekip 1 / ortalama 2,4") · **seçim** (açılır liste, boş başlar).
+  - Sağda canlı kontenjan sayacı: "Bowling 3/4 · Havuz 2/3". Kontenjan aşılırsa uyarı verilir ama engellenmez (karar yönetimde).
+  - "Önerileri forma aktar" butonu seçimleri önerilerle doldurur. Yönetim istediğini değiştirir ve **"Planı kaydet"** butonuna basar. Kaydedilmemiş plan hiçbir yerde görünmez.
+- Kaydedilen plan liderin "Ekibim" ekranında "Bu hafta: …" olarak görünür ve yoklama formunda etkinlik türünü önceden seçer (lider değiştirebilir).
+
+**d) Öneri algoritması** (`lib/matching/suggest.ts`, saf fonksiyon, birim testli)
+- Girdi: aktif ekipler, rotasyondaki türler (`in_rotation = true`), her ekip × tür için **bu dönemki** yapılma sayısı ve son tarih, haftanın kontenjanları, o hafta zaten elle seçilmiş satırlar (bunlar sabit kabul edilir, kontenjandan düşülür).
+- Her ekip × tür için ihtiyaç skoru, öncelik sırasıyla:
+  1. **Hiç yapmadıysa** büyük bonus (`+100`).
+  2. **Eksik**: `(türün ekipler arası en yüksek sayısı − ekibin sayısı) × 10`. Hedef herkesin eşitlenmesi.
+  3. **Bekleme**: son yapılmasının üzerinden geçen hafta sayısı (en fazla 12).
+  4. **Tekrar cezası**: son 2 rotasyon haftasında yapıldıysa `−50`.
+  Ağırlıklar ayarlar sayfasından değiştirilebilir, varsayılanlar yukarıdaki gibidir.
+- Atama: kontenjanlara uyan **açgözlü** atama. Önce en çok "hiç yapmadığı" tür olan ekipler ele alınır, sonra en yüksek skorlu (ekip, tür) çiftlerinden başlanır. Eşitlikte ekip adına göre sabit sıra izlenir (deterministik sonuç). Kontenjan biterse ekibe bir sonraki uygun tür önerilir.
+- Çıktı: her ekip için 1 öneri ve 2 alternatif, her biri insan diliyle yazılmış gerekçeyle. Ayrıca özet satırı: "Bu plan uygulanırsa hiç Havuz'a gitmeyen ekip sayısı 11 → 8".
+- Testler: (i) hiç yapmayan önceliği, (ii) kontenjan aşılmaması, (iii) elle seçilenlerin korunması, (iv) aynı girdiye aynı çıktı.
+
+**e) Plan ve gerçekleşen karşılaştırması**: geçmiş haftalarda plan ile liderin girdiği etkinlik türü farklıysa matriste ve planlayıcıda işaretlenir.
 
 ### 6.10 Yönetim — Kullanıcılar (`/yonetim/kullanicilar`)
 - Davet ekle: e-posta + rol + (lider için) ekip + (koordinatör için) okullar.
 - Liste: kişi, rol, ekip, son giriş, aktif/pasif. Pasife alınan kullanıcının oturumu bir sonraki istekte düşer.
 
 ### 6.11 Yönetim — Ayarlar (`/yonetim/ayarlar`)
-- Etkinlik türleri: ekle, yeniden adlandır, renk seç, sırala, rotasyona dahil et veya çıkar, pasifleştir (silme yok).
+- Etkinlik türleri: ekle, yeniden adlandır, renk seç, sırala, rotasyona dahil et veya çıkar, varsayılan kontenjan, pasifleştir (silme yok).
+  Seed: **rotasyonda** Bowling (4), Paintball (4), Havuz (3), Fotoğraf (4), Workshop (5), Stüdyo/Reels (4), Sosyal Sorumluluk (5), Sunum (5), Kitap Tahlili (3), Film Tahlili (4). **Rotasyon dışı**: Liderlik, Şenlik, Serbest Gezi, Kamp, Konferans, Belgesel, Drama. (Parantez içi = varsayılan kontenjan.) "Ertelendi" bir tür değildir (§6.3).
 - Devamsızlık eşiği.
 - Okul listesi (birleştirme dahil: "Hüsnü M. Özyeğin" ile "Hüsnü M.özyiğin" aynı okul).
 - Ekipler: ad, lider, sınıf, cinsiyet, buluşma günü.
-- Eşleştirme ağırlıkları (A, B, C).
+- Eşleştirme ağırlıkları (§6.9-d).
 
 ### 6.12 Yönetim — İçe Aktarma (`/yonetim/ice-aktar`)
 §9'daki sihirbaz.
@@ -456,11 +487,11 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 - [ ] Denetim kaydı ekranı
 
 ### Faz 3 — Eşleştirme
-- [ ] Geçmiş matrisi (ısı haritası)
+- [ ] Etkinlik dağılım matrisi (ortalamaya göre renk, denge skoru, Excel indir)
 - [ ] Haftalık planlayıcı, kapasite, ortak program etkinliği
 - [ ] Öneri algoritması + gerekçeler + birim testleri
 - [ ] Planın lider ekranına ve yoklama formuna yansıması, plan ve gerçekleşen karşılaştırması
-- [ ] Geçen yılın verisiyle ağırlık ve döngü ayarı (§13)
+- [ ] Program takvimi (ortak / rotasyon / ara haftalar, "döngüyü uygula")
 
 ### Faz 4 — Cila
 - [ ] Logo ve marka renkleri, boş durum ekranları, yükleme iskeletleri
@@ -485,7 +516,7 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 
 | # | Konu | Durum |
 |---|---|---|
-| 1 | **Geçen yılın (2025–2026) etkinlik dosyası**: eşleştirme döngüsünün gerçek örüntüsünü (hangi tür hangi sıklıkta, hangi ekip hangi gün, ortak günler) analiz etmek için. | Kullanıcı gönderecek. Gelince §6.9 güncellenecek. |
+| 1 | Geçen yılın (2025–2026) etkinlik dosyası. | ✅ Analiz edildi, bulgular §6.9'da. Veri sisteme aktarılmaz. |
 | 2 | **Tayfa / Esenler Gençlik Spor logosu** (SVG veya yüksek çözünürlüklü PNG) ve varsa kurumsal renk kodları. | Kullanıcı gönderecek. Gelince §8 token'ları güncellenecek. |
 | 3 | İlk admin e-postası `affanbugraozaytas@gmail.com` mi? | Teyit bekleniyor. |
 | 4 | KVKK aydınlatma metni. | Belediyeden gelecek. O zamana kadar boş sayfa. |
