@@ -5,7 +5,8 @@ import { mapStatus, normalizeKey, normalizePhone, splitActivityTypes, toTitleCas
 import { parseBirthDate, parseSessionDate } from "@/lib/import/dates";
 import { parseSheetName, parseWorkbook } from "@/lib/import/parse-workbook";
 import { mergeRegistrations } from "@/lib/import/merge";
-import { buildFakeWorkbook, fakeTc, roundTrip, TC_A, TC_B, TC_C } from "./fake-workbook";
+import { buildLoadPlan } from "@/lib/import/plan";
+import { buildFakeWorkbook, fakeTc, roundTrip, TC_A, TC_B, TC_C, TC_D } from "./fake-workbook";
 
 describe("tc", () => {
   it("validates checksum", () => {
@@ -89,7 +90,7 @@ describe("parseWorkbook", () => {
   const team = parsed.teams[0];
 
   it("skips Notlar and Şablon, reads sheet names", () => {
-    expect(parsed.teams.map((t) => t.sheetName)).toEqual(["DENEME LİDER 10", "İKİNCİ LİDER 11"]);
+    expect(parsed.teams.map((t) => t.sheetName)).toEqual(["DENEME LİDER 10", "İKİNCİ LİDER 11", "ÜÇÜNCÜ LİDER 10"]);
     expect(team).toMatchObject({ leaderName: "Deneme Lider", grade: 10, schoolHint: "Deneme Anadolu Lisesi" });
     expect(parseSheetName("RÜMSEYSANUR MUTLU 11")).toEqual({ leaderName: "Rümseysanur Mutlu", grade: 11 });
   });
@@ -104,7 +105,7 @@ describe("parseWorkbook", () => {
     expect(main[1]).toMatchObject({ tcValid: false, phone: "5550000003", notes: "Veli: Annesinin telefonu" });
     expect(main[2].status).toBe("removed");
     const extra = team.students.filter((s) => s.source === "excel_new_registration");
-    expect(extra.map((s) => s.fullName)).toEqual(["Muhammet Ali Denemeoglu", "Haktan Ilgaz", "Şeyma İnce", "Kaymış Satır"]);
+    expect(extra.map((s) => s.fullName)).toEqual(["Muhammet Ali Denemeoglu", "Haktan Ilgaz", "Şeyma İnce", "Kaymış Satır", "Ayşe Bölünmüş"]);
     expect(extra[2]).toMatchObject({ tcNo: TC_B, phone: "5350000005", birthDate: "2011-08-10" });
   });
 
@@ -112,6 +113,10 @@ describe("parseWorkbook", () => {
     const shifted = team.students.find((s) => s.fullName === "Kaymış Satır")!;
     expect(shifted).toMatchObject({ tcNo: TC_C, tcValid: true, phone: "5350000006", birthDate: null, birthDateRaw: null });
     expect(team.warnings.map((w) => `${w.code}@${w.cell}`)).toContain("columns_shifted@F45");
+    const split = team.students.find((s) => s.fullName === "Ayşe Bölünmüş")!;
+    expect(split).toMatchObject({
+      tcNo: TC_D, tcValid: true, phone: "5350000007", birthDate: "2011-08-25", schoolRaw: "İTMTAL", classLabel: "10", schoolNumber: "77",
+    });
   });
 
   it("reads sessions, multi-type tags, comments; skips empty and orphan values", () => {
@@ -134,13 +139,49 @@ describe("parseWorkbook", () => {
     expect(second.students.map((s) => s.fullName)).toEqual(["Elif Deneme"]);
   });
 
+  it("skips columns whose only mark is template residue on row 9", () => {
+    const third = parsed.teams[2];
+    expect(third.sessions.map((s) => [s.column, s.slot])).toEqual([["M", 1]]);
+    expect(third.sessions[0].date.date).toBe("2026-10-11");
+    expect(third.warnings.map((w) => `${w.code}@${w.cell}`)).toContain("template_residue@L9");
+  });
+
   it("merges new registrations by TC, then by name", () => {
     const merged = mergeRegistrations(team.students);
-    expect(merged).toHaveLength(5);
+    expect(merged).toHaveLength(6);
     const muhammet = merged.find((s) => s.key === "main:10")!;
     expect(muhammet).toMatchObject({ matchedBy: "tc", mergedKeys: ["new:42"] });
     expect(muhammet.conflicts).toEqual([{ field: "schoolNumber", kept: "123", other: "999" }]);
     expect(merged.find((s) => s.key === "main:11")).toMatchObject({ matchedBy: "name", mergedKeys: ["new:43"] });
     expect(merged.find((s) => s.key === "new:44")).toMatchObject({ source: "excel_new_registration", matchedBy: null });
+  });
+});
+
+describe("buildLoadPlan", () => {
+  const plan = buildLoadPlan(parseWorkbook(roundTrip(buildFakeWorkbook()), XLSX.utils));
+
+  it("dates sessions: Şenlik rule, real dates, inferred by column order", () => {
+    const deneme = plan.sessions.filter((s) => s.teamSheet === "DENEME LİDER 10");
+    expect(deneme.map((s) => [s.date, s.dateInferred])).toEqual([
+      ["2026-10-05", false],
+      ["2026-10-10", false],
+      ["2026-10-17", true],
+    ]);
+    expect(deneme[2].activityTypes).toEqual(["Fotoğraf", "Liderlik"]);
+  });
+
+  it("maps attendance to merged students and school aliases", () => {
+    const muhammet = plan.students.find((s) => s.fullName === "Muhammet Ali Denemeoğlu")!;
+    expect(muhammet.importKey).toBe(`DENEME LİDER 10|tc:${TC_A}`);
+    const keys = new Set(plan.students.map((s) => s.importKey));
+    for (const s of plan.sessions) for (const a of s.attendance) expect(keys.has(a.studentImportKey)).toBe(true);
+    expect(plan.students.find((s) => s.fullName === "Ayşe Bölünmüş")!.schoolName).toBe(
+      "İbrahim Turhan Mesleki ve Teknik Anadolu Lisesi",
+    );
+    expect(plan.students.find((s) => s.status === "removed")!.statusReason).toBeTruthy();
+  });
+
+  it("teams get display names", () => {
+    expect(plan.teams[0]).toEqual({ sheetName: "DENEME LİDER 10", name: "Deneme Lider · 10", leaderName: "Deneme Lider", grade: 10 });
   });
 });

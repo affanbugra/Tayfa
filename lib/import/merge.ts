@@ -1,12 +1,13 @@
-// Ana liste ile "Yeni Kayıt" satırlarını eşleştirir. Kesin eşleşmeler (geçerli TC, aynı normalize ad)
-// birleştirilir; geri kalanlar ayrı öğrenci olarak kalır.
+// Ana liste ile "Yeni Kayıt" satırlarını eşleştirir: önce geçerli TC, sonra aynı ad, sonra benzer ad
+// (Türkçe harfler sadeleştirilmiş eşitlik ya da biri diğerinin tüm kelimelerini içeriyor). Eşleşmeyenler
+// ayrı öğrenci olarak kalır.
 import { normalizeKey } from "./normalize";
 import type { ParsedStudent } from "./parse-workbook";
 
 export type MergedStudent = ParsedStudent & {
   /** Bu kayda birleştirilen diğer satırların anahtarları */
   mergedKeys: string[];
-  matchedBy: "tc" | "name" | null;
+  matchedBy: "tc" | "name" | "similar_name" | null;
   conflicts: { field: keyof ParsedStudent; kept: string; other: string }[];
 };
 
@@ -22,13 +23,14 @@ export function mergeRegistrations(students: ParsedStudent[]): MergedStudent[] {
   for (const extra of students.filter((s) => s.source === "excel_new_registration")) {
     const byTc = extra.tcValid ? result.find((m) => m.tcValid && m.tcNo === extra.tcNo) : undefined;
     const byName = byTc ? undefined : result.find((m) => normalizeKey(m.fullName) === normalizeKey(extra.fullName));
-    const target = byTc ?? byName;
+    const bySimilar = byTc || byName ? undefined : result.find((m) => m.source === "excel_main" && similarNames(m.fullName, extra.fullName));
+    const target = byTc ?? byName ?? bySimilar;
     if (!target) {
       result.push({ ...extra, mergedKeys: [], matchedBy: null, conflicts: [] });
       continue;
     }
     target.mergedKeys.push(extra.key);
-    target.matchedBy ??= byTc ? "tc" : "name";
+    target.matchedBy ??= byTc ? "tc" : byName ? "name" : "similar_name";
     for (const field of FILLABLE) {
       const kept = target[field];
       const other = extra[field];
@@ -43,4 +45,22 @@ export function mergeRegistrations(students: ParsedStudent[]): MergedStudent[] {
     }
   }
   return result;
+}
+
+/** Türkçe harfleri ASCII'ye indirger: "Denemeoğlu" ve "Denemeoglu" aynı anahtarı verir. */
+export function foldName(name: string): string {
+  return normalizeKey(name)
+    .replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u")
+    .replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c").replace(/â/g, "a").replace(/î/g, "i").replace(/û/g, "u");
+}
+
+/** "Ayşe Yılmaz" ~ "Ayse Nur Yılmaz": sadeleştirilmiş eşitlik ya da en az iki kelimeli alt küme. */
+export function similarNames(a: string, b: string): boolean {
+  const fa = foldName(a);
+  const fb = foldName(b);
+  if (fa === fb) return true;
+  const ta = fa.split(" ");
+  const tb = fb.split(" ");
+  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  return short.length >= 2 && short.every((w) => long.includes(w));
 }

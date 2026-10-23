@@ -42,6 +42,8 @@ export type ParsedAttendance = {
 
 export type ParsedSession = {
   column: string;
+  /** Sayfadaki kaçıncı dolu yoklama sütunu (0 = ilk). Atlanan şablon sütunları da sayılır; tarihsiz sütunun haftası buradan çıkar. */
+  slot: number;
   activityTypes: string[];
   date: SessionDateResult;
   attendance: ParsedAttendance[];
@@ -60,7 +62,8 @@ export type ImportWarning = {
     | "session_date_suspicious"
     | "session_date_unparsed"
     | "unparsed_sheet_name"
-    | "columns_shifted";
+    | "columns_shifted"
+    | "template_residue";
   message: string;
 };
 
@@ -121,9 +124,9 @@ function parseTeamSheet(sheetName: string, ws: WorkSheet, utils: XlsxUtils): Par
   const buildStudent = (
     source: ParsedStudent["source"],
     row: number,
-    cols: { name: number; status?: number; phone: number; school: number; cls: number; tc: number; birth: number; parent?: number; schoolNo: number },
+    cols: { name: number; surname?: number; status?: number; phone: number; school: number; cls: number; tc: number; birth: number; parent?: number; schoolNo: number },
   ): ParsedStudent | null => {
-    const nameRaw = cleanText(value(row, cols.name));
+    const nameRaw = cleanText([value(row, cols.name), cols.surname !== undefined ? value(row, cols.surname) : null].filter(Boolean).join(" "));
     if (!nameRaw) return null;
     const key = `${source === "excel_main" ? "main" : "new"}:${row}`;
     let phoneCell: unknown = value(row, cols.phone);
@@ -195,17 +198,25 @@ function parseTeamSheet(sheetName: string, ws: WorkSheet, utils: XlsxUtils): Par
     }
   }
   for (let row = newRegHeader ? newRegHeader + 1 : lastRow + 1; row <= lastRow; row++) {
-    const s = buildStudent("excel_new_registration", row, { name: 3, phone: 4, tc: 5, birth: 6, school: 7, cls: 8, schoolNo: 9 });
+    // Bazı satırlarda ad D'ye, soyad E'ye yazılmış; geri kalan her şey bir sütun sağa kaymış.
+    const e = cleanText(value(row, 4));
+    const splitName = !!e && !/\d/.test(e) && tcFromCell(value(row, 6))?.length === 11;
+    if (splitName) warn("columns_shifted", addr(row, 4), "Soyadı ayrı sütuna yazılmış, satır bir sütun kaydırılarak okundu");
+    const s = splitName
+      ? buildStudent("excel_new_registration", row, { name: 3, surname: 4, phone: 5, tc: 6, birth: 7, school: 8, cls: 9, schoolNo: 10 })
+      : buildStudent("excel_new_registration", row, { name: 3, phone: 4, tc: 5, birth: 6, school: 7, cls: 8, schoolNo: 9 });
     if (s) students.push(s);
   }
 
   // Yoklama sütunları
   const sessions: ParsedSession[] = [];
+  let slot = -1;
   for (let col = FIRST_ATTENDANCE_COL; col <= lastCol; col++) {
     const typeText = cleanText(value(7, col));
     if (typeText && normalizeKey(typeText).startsWith("not")) break; // "Notlar" sütunu
     const dateCell = value(8, col);
     const marks: ParsedAttendance[] = [];
+    const markedRows: number[] = [];
 
     for (let row = MAIN_FIRST_ROW; row <= lastRow; row++) {
       const raw = cleanText(value(row, col));
@@ -222,18 +233,31 @@ function parseTeamSheet(sheetName: string, ws: WorkSheet, utils: XlsxUtils): Par
       }
       const comment = cell(row, col)?.c?.map((c) => c.t).join(" ");
       marks.push({ studentKey, status, excuseNote: cleanComment(comment) });
+      markedRows.push(row);
     }
 
     const activityTypes = splitActivityTypes(typeText);
     const hasDate = cleanText(dateCell) !== null;
-    if (marks.length === 0) continue; // şablondan kalma boş sütun
+    if (marks.length === 0 && markedRows.length === 0 && !hasAnyMark(col)) continue; // boş sütun
+    slot++;
+    if (marks.length === 0) continue;
+    // Şablonda ilk öğrenci satırı (9) dolu geliyor: sütundaki tek işaret oradaysa gerçek yoklama değildir.
+    if (marks.length === 1 && markedRows[0] === MAIN_FIRST_ROW) {
+      warn("template_residue", addr(MAIN_FIRST_ROW, col), "Sütunda sadece şablondan kalan tek değer var, atlandı");
+      continue;
+    }
 
     const date = parseSessionDate(hasDate ? dateCell : null);
     const column = utils.encode_col(col);
     if (date.issue === "missing") warn("session_date_missing", `${column}8`, "Yoklama var ama tarih yok");
     if (date.issue === "suspicious") warn("session_date_suspicious", `${column}8`, `Tarih şüpheli (${date.raw} → ${date.date})`);
     if (date.issue === "unparsed") warn("session_date_unparsed", `${column}8`, `Tarih okunamadı: "${date.raw}"`);
-    sessions.push({ column, activityTypes, date, attendance: marks });
+    sessions.push({ column, slot, activityTypes, date, attendance: marks });
+  }
+
+  function hasAnyMark(col: number): boolean {
+    for (let row = MAIN_FIRST_ROW; row <= lastRow; row++) if (mapAttendance(cleanText(value(row, col)) ?? "")) return true;
+    return false;
   }
 
   const schoolHint = cleanText(value(5, 3));

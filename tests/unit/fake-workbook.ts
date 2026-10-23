@@ -14,6 +14,7 @@ export function fakeTc(first9: string): string {
 export const TC_A = fakeTc("123456780");
 export const TC_B = fakeTc("234567891");
 export const TC_C = fakeTc("345678912");
+export const TC_D = fakeTc("456789123");
 
 function setCell(ws: XLSX.WorkSheet, a1: string, cell: XLSX.CellObject) {
   ws[a1] = cell;
@@ -68,10 +69,14 @@ export function buildFakeWorkbook(): XLSX.WorkBook {
   // Sütunları kaymış satır: telefon TC sütununda, TC doğum tarihi sütununda
   s("D45", "Kaymış Satır"); s("F45", 5350000006); setCell(ws, "G45", { t: "n", v: Number(TC_C) });
 
-  ws["!ref"] = "A1:P45";
+  // Soyadı ayrı sütuna yazılmış satır: D ad · E soyad · F telefon · G TC · H doğum · I okul · J sınıf · K okul no
+  s("D46", "AYŞE"); s("E46", "BÖLÜNMÜŞ"); s("F46", "0535 000 00 07"); s("G46", TC_D);
+  setCell(ws, "H46", { t: "n", v: 40780, z: "d.m.yyyy" }); s("I46", "İTMTAL"); s("J46", 10); s("K46", 77);
+
+  ws["!ref"] = "A1:P46";
   XLSX.utils.book_append_sheet(wb, ws, "DENEME LİDER 10");
 
-  // Ana listesi boş, öğrencileri sadece Yeni Kayıt'ta olan ekip
+  // Ana listesi boş, öğrencileri sadece Yeni Kayıt'ta olan ekip; L'de şablon artığı
   const ws2: XLSX.WorkSheet = {};
   ws2["L7"] = { t: "s", v: "Şenlik" };
   ws2["L9"] = { t: "s", v: "Geldi" };
@@ -79,6 +84,19 @@ export function buildFakeWorkbook(): XLSX.WorkBook {
   ws2["D39"] = { t: "s", v: "Elif Deneme" };
   ws2["!ref"] = "A1:M42";
   XLSX.utils.book_append_sheet(wb, ws2, "İKİNCİ LİDER 11");
+
+  // 9. satırda gerçek öğrenci var; şablondan kalan tek "Geldi" sadece orada (L), M gerçek yoklama
+  const ws3: XLSX.WorkSheet = {};
+  ws3["B9"] = { t: "s", v: "İlk Öğrenci" };
+  ws3["B10"] = { t: "s", v: "İkinci Öğrenci" };
+  ws3["L7"] = { t: "s", v: "Fotoğraf" };
+  ws3["L9"] = { t: "s", v: "Geldi" };
+  ws3["M7"] = { t: "s", v: "Liderlik" };
+  ws3["M8"] = { t: "s", v: "11 Ekim" };
+  ws3["M9"] = { t: "s", v: "Geldi" };
+  ws3["M10"] = { t: "s", v: "Gelmedi" };
+  ws3["!ref"] = "A1:M10";
+  XLSX.utils.book_append_sheet(wb, ws3, "ÜÇÜNCÜ LİDER 10");
   return wb;
 }
 

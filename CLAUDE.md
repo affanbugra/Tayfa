@@ -452,9 +452,11 @@ Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taş
 | Telefon biçimleri: `5515069537`, `0530 381 05 44`, `90 535 479 27 51`, `(501) 127 21 76` | Rakam dışını sil, baştaki `90` / `0` kaldırılır → 10 hane `5XXXXXXXXX`. 10 hane çıkmazsa ham hali korunur ve işaretlenir. |
 | Tarih yılı karışık: Şablon'daki `5 Ekim 2025` kopyalanmış; diğerleri 2026 | Program yılına göre düzelt: ay ≥ 9 → 2026, ay ≤ 8 → 2027. **Ama** şablondan kalan tarih yıl düzeltilince hafta sonu dışına düşebilir (`5 Ekim 2025 Paz` → `5 Ekim 2026 Pzt`). Düzeltilmiş tarih cumartesi/pazar değilse sütun "tarih şüpheli" olarak işaretlenir ve admin onaylar. Şenlik gibi ortak etkinliklerde tek tarih tüm ekiplere birlikte atanabilir. |
 | Tarih metin olarak yazılmış: `"13 EKİM"`, `"10 Ekim"` | Türkçe ay adlarıyla ayrıştır (büyük/küçük harf ve İ/ı duyarsız), yılı yukarıdaki kuralla ekle. Hafta içine düşen tarih (13 Ekim 2026 Salı) "tarih şüpheli" olur. |
-| Tarih boş ama yoklama verisi var | Sütunun haftası sıradan çıkarılır, gün ekibin buluşma günüdür. Kural `scripts/excel-overrides.ts`'te durur; tarihi atanamayan sütun varsa yükleme durur. |
+| Tarih boş ama yoklama verisi var | Sütunun haftası sayfadaki sırasından çıkarılır (Şenlik haftası = 3 Ekim cumartesi, sonraki her sütun +1 hafta), gün ekibin Excel'deki tarihli buluşmalarından (yoksa cumartesi). Buluşmanın notuna "tarih tahmin edildi" yazılır. Kural `scripts/excel-overrides.ts`'te durur; tarihi atanamayan sütun varsa yükleme durur. |
 | Etkinlik türü yazımları: `"Fotoğraf "` (sonda boşluk), `"Fotoğraf, Liderlik"` | Virgülle böl, kırp, Türkçe büyük/küçük harf duyarsız eşleştir. Birden çok tür → çoklu etiket. Eşleşmeyen tür → yükleme durur, kullanıcıya sorulur. |
 | Etkinlik türü var, tarih yok, hiç yoklama yok (şablondan kalma boş sütunlar) | Atla. |
+| Sütundaki tek işaret 9. satırda (şablonda ilk satır dolu geliyor; 27 sütun) | Şablon artığı, atla. |
+| Yeni Kayıt'ta ad D'ye, soyad E'ye yazılmış, geri kalan her şey bir sütun sağa kaymış (~30 satır) | E metinse ve G 11 haneliyse satırı bir sütun kaydırarak oku, ad = D + E. |
 | Doğum tarihi metin: `"23.8.2011"`, `"10/08/2011"`, `"14.1.2011"` | `d.M.yyyy` ve `dd/MM/yyyy` dene. Başarısızsa boş bırak ve işaretle. |
 | Durum: `Devam Ediyor`, `devam`, boş, `" "` | → `active`. `Devamsızlık Sınırında` → `at_risk`. `Çıkarıldı` → `removed`. |
 | Okul adı varyasyonları: "Hüsnü M. Özyeğin Anadolu Lisesi", "Hüsnü M.özyiğin", "Hüsnü M. Özyeğ" | Normalize et (küçük harf, tr, noktalama ve boşluk temizliği). Varyasyonlar `scripts/excel-overrides.ts` içindeki eşleme tablosuyla tek `school`'a bağlanır (okul adları kişisel veri değildir); sonra Ayarlar'dan birleştirilebilir. |
@@ -546,6 +548,7 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 | 4 | KVKK aydınlatma metni. | Belediyeden gelecek. O zamana kadar boş sayfa. |
 | 5 | Supabase mı, başka bir altyapı mı? | ✅ Supabase, ücretsiz plan. |
 | 6 | Yedekleme. | ✅ Şimdilik yapılmıyor (kullanıcı kararı). Ücretsiz planda otomatik yedek yok. |
-| 7 | Şenlik'in gerçek tarihi (Excel'de şablondan kalan 4/5 Ekim 2025 yazıyor). | Bekliyor. Yükleme kuralına yazılacak. |
-| 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | Analiz: 427 ana liste + 65 (ana listesi boş 3 ekip) + 82 gerçekten yeni + 12 ad varyasyonu (aynı kişi) ≈ 574. 8 kişi başka bir ekibin ana listesinde de var. Hepsi aktarılır; kullanıcı onayı bekleniyor. |
+| 7 | Şenlik'in gerçek tarihi. | ✅ Kullanıcı: 5 Ekim 2026. Tüm Şenlik sütunları bu tarihe yazılır (uygulamadan düzeltilebilir). |
+| 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | ✅ Hepsi aktarılır (kullanıcı: "en ideali yap, yanlışsa uygulamadan düzeltilir"). Sonuç: 567 öğrenci. Başka ekibin ana listesinde de olan Yeni Kayıt satırları ana listedeki ekipte kalır. |
+| 10 | Ekiplerin cinsiyeti ve buluşma günü. | ✅ Bilinmiyor; boş başlar. Lider kendi ekibinde, yönetici hepsinde uygulamadan girer. Eşleştirmede yönetim tarihi elle seçer (`plan_entries.planned_date`), lider o tarihi görür. |
 | 9 | SheetJS sürümü. | npm'deki `xlsx@0.18.5` eski ve bilinen açıkları var (dosya ayrıştırmada). Geliştirme ortamı `cdn.sheetjs.com`'a erişemediği için geçici olarak bu sürüm kullanılıyor; Vercel'e çıkmadan önce `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` ile değiştirilir. |
