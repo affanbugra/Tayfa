@@ -1,5 +1,5 @@
 // Ana liste ile "Yeni Kayıt" satırlarını eşleştirir. Kesin eşleşmeler (geçerli TC, aynı normalize ad)
-// birleştirilir; geri kalanlar ayrı öğrenci olarak kalır ve sihirbazda admin onayına sunulur.
+// birleştirilir; geri kalanlar ayrı öğrenci olarak kalır.
 import { normalizeKey } from "./normalize";
 import type { ParsedStudent } from "./parse-workbook";
 

@@ -57,7 +57,7 @@ görünümlü bir web uygulaması.
 | Sınıf seviyesi | Her ekibin bir `grade` değeri (10 / 11) vardır. Raporlar bu alana göre filtrelenir. |
 | Cinsiyet | Ekipler cinsiyete göre ayrılır. Ekibin `gender` alanı vardır (K / E). |
 | Bilinç Atölyesi sütunu | Kaldırılır, aktarılmaz. |
-| Excel'den geçiş | Mevcut Google Sheets dosyasındaki **tüm öğrenciler ve yoklamalar sisteme aktarılır**, kimse öğrencisini sıfırdan girmez. Aktarım bir kez, canlıya geçiş günü yapılır; o günden sonra liderler sadece uygulamayı kullanır ve Sheets arşiv olarak kalır. (Excel **dışa aktarma** ayrı bir özelliktir ve her zaman vardır: filtrele, sütun seç, indir; bkz. §6.8.) |
+| Excel'den geçiş | Sistem **mevcut verilerle dolu açılır**: Sheets'teki tüm ekipler, öğrenciler ve yoklamalar canlıya çıkmadan önce Claude tarafından sunucu tarafında bir kez yüklenir. Uygulamada içe aktarma ekranı / sihirbazı **yoktur**, kimse öğrencisini sıfırdan girmez. Canlıya geçiş günü Sheets'in son hali yüklenir; o günden sonra liderler sadece uygulamayı kullanır, öğrenci ekleme/çıkarma/düzenleme uygulamadan yapılır, Sheets arşiv olarak kalır. Şablon sayfası yalnızca örnektir, aktarılmaz. (Excel **dışa aktarma** ayrı bir özelliktir ve her zaman vardır: filtrele, sütun seç, indir; bkz. §6.8.) |
 | Eşleştirme | Sistem **önerir**, karar **yönetimin** elindedir. Sistem hiçbir ekibe kendiliğinden etkinlik atamaz. Yönetim önerileri tek tıkla forma alabilir ama kaydetmek her zaman elle yapılan bir onaydır. Önerinin amacı **adalettir**: her ekip her rotasyon etkinliğini eşit sayıda yapmalı (havuza hiç gitmeyen havuza; herkes 3 kez yapmışken 2'de kalan o etkinliğe). "Kim neyi kaç kez yaptı" **görsel matrisi** zorunludur. |
 | Haftalık döngü | Genel kalıp **Liderlik → Rotasyon → Rotasyon** (§6.9). Liderlik / Şenlik / Kamp gibi haftalar **ortak** (tüm ekipler aynı), rotasyon haftalarında ekipler kontenjanlı etkinliklere dağıtılır. Döngü varsayılandır, yönetim her haftanın tipini değiştirebilir. Her ekibin buluşma günü genelde sabittir. |
 | Geçen yıl verisi | **Kullanılmaz.** Eşleştirme sıfırdan, sadece 2026–2027 verisiyle başlar. Geçen yılın dosyası sadece iş kurallarını anlamak için analiz edildi (§6.9). |
@@ -101,7 +101,6 @@ Yeni bağımlılık eklemeden önce mevcut yığınla çözülüp çözülemeyec
 | Öğrenciyi ekipler arasında taşıma | — | ✔ |
 | Kullanıcı davet etme, rol ve ekip atama | — | ✔ |
 | Etkinlik türleri, okul listesi ayarları | — | ✔ |
-| Excel içe aktarma | — | ✔ |
 | Denetim kaydını görme | — | ✔ |
 
 - Bir liderin tek ekibi olur. Bir ekibin tek lideri olur. Lider değişirse admin `teams.leader_id` alanını günceller.
@@ -328,9 +327,6 @@ Amaç: yönetimin haftalık "hangi ekip ne yapacak" kararını **kolaylaştırma
 - Ekipler: ad, lider, sınıf, cinsiyet, buluşma günü.
 - Eşleştirme ağırlıkları (§6.9-d).
 
-### 6.12 Yönetim — İçe Aktarma (`/yonetim/ice-aktar`)
-§9'daki sihirbaz.
-
 ### 6.13 Yönetim — Kayıtlar (`/yonetim/kayitlar`)
 Denetim günlüğü: kim, ne zaman, neyi, nasıl değiştirdi. Filtrelenebilir.
 
@@ -342,7 +338,7 @@ Denetim günlüğü: kim, ne zaman, neyi, nasıl değiştirdi. Filtrelenebilir.
 app/
   (auth)/giris/page.tsx
   (lider)/ekibim/ … yoklama/ … ogrenciler/ …
-  (yonetim)/yonetim/ … ekipler/ raporlar/ sorgu/ eslestirme/ kullanicilar/ ayarlar/ ice-aktar/ kayitlar/
+  (yonetim)/yonetim/ … ekipler/ raporlar/ sorgu/ eslestirme/ kullanicilar/ ayarlar/ kayitlar/
   api/…                     -- sadece gerekirse; tercih server actions
 components/ui/              -- shadcn bileşenleri
 components/…                -- uygulama bileşenleri (AttendanceRow, StatusBadge, KpiTile …)
@@ -425,9 +421,9 @@ Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taş
 
 ---
 
-## 9. Excel İçe Aktarma (tek seferlik geçiş)
+## 9. Mevcut Verinin Yüklenmesi (tek seferlik, sunucu tarafında)
 
-**Gerçek Excel dosyası ve öğrencilerin kişisel verileri asla repoya girmez.** `.gitignore` içinde `*.xlsx`, `*.xls`, `*.csv` bulunur. İçe aktarma, canlı sistemde admin panelinden yapılır. Dosya **tarayıcıda** SheetJS ile ayrıştırılır, sunucuya sadece temizlenmiş JSON gider ve dosya hiçbir yerde saklanmaz.
+**Gerçek Excel dosyası ve öğrencilerin kişisel verileri asla repoya girmez.** `.gitignore` içinde `*.xlsx`, `*.xls`, `*.csv` bulunur. Yükleme Claude'un çalışma ortamında, repo dışındaki bir dosyadan yapılır; dosya ve çıktıları commit edilmez, loglara kişisel veri yazılmaz.
 
 ### 9.1 Kaynak yapısı (`Tayfa Liderlik Programı 2026-2027 Yoklaması.xlsx`)
 - 28 sayfa. `Notlar ` (kullanım talimatı) ve `Şablon` atlanır. Kalan **26 sayfanın her biri bir ekip**.
@@ -442,7 +438,7 @@ Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taş
 **Gerçek dosyanın analizi (23 Ekim 2026, sadece sayımlar):**
 - Ana listede 427, Yeni Kayıt'ta 447 satır var. Yeni Kayıt yalnızca "sonradan katılanlar" değil, büyük ölçüde **aynı öğrencilerin ikinci kaydı**: yaklaşık 270'i ad soyadla ana listeyle eşleşiyor. Eşleşmeyen yaklaşık 170 satır kalıyor, yani birleşik liste ~600 kişi çıkıyor (beklenen ~430). Bu yüzden eşleştirme bulanık olmalı (TC, sonra normalize ad, sonra benzer ad) ve **şüpheli eşleşmeler admin onayına** sunulmalı.
 - Yoklama sütunları: Şenlik (ortak, 1 hafta), Liderlik (10–11 Ekim haftası), birkaç Fotoğraf ve 1 Stüdyo/Reels. Toplam 538 yoklama hücresi (323 Geldi, 145 Gelmedi, 70 Mazeret), 31 mazeret notu.
-- Liderlik ve Fotoğraf sütunlarının çoğunda **tarih boş** (25+ sütun). Sihirbaz "ekibin günü + hafta" seçtirerek tarih atar.
+- Liderlik ve Fotoğraf sütunlarının çoğunda **tarih boş** (25+ sütun). Yükleme kuralı: tarih, sütun sırasına göre haftaya ve ekibin buluşma gününe göre atanır (kullanıcı onaylı).
 - Birçok sütunda adı boş olan 9. satırda tek bir `Geldi/Gelmedi` değeri var (şablon artığı). Öğrenci adı olmayan satırdaki yoklama yok sayılır ve raporlanır. 33. satırın altında da 3 başıboş yoklama hücresi var, aynı kural.
 - Ana listede 337 TC'nin 17'si geçersiz. Telefonlarda `5XXXXXXXXX.0` (sayı), görünmez Unicode yön işaretleri, bölünmez boşluk, `Yok`, `5XX…(Annesinin telefonu)` gibi değerler var: rakam dışı temizlenir, parantez içi açıklama `notes` alanına gider.
 - Sınıf sütunu çoğunlukla boş, dolu olanlar `10`, `11`, `10/F`, `10-F`, `11-C Adalet`, `11/MTA` gibi. Olduğu gibi `class_label`'a aktarılır (sayı ise tam sayıya çevrilir).
@@ -456,24 +452,22 @@ Etkinlik türlerinin renkleri Excel'deki çiplerin tonlarını yumuşatarak taş
 | Telefon biçimleri: `5515069537`, `0530 381 05 44`, `90 535 479 27 51`, `(501) 127 21 76` | Rakam dışını sil, baştaki `90` / `0` kaldırılır → 10 hane `5XXXXXXXXX`. 10 hane çıkmazsa ham hali korunur ve işaretlenir. |
 | Tarih yılı karışık: Şablon'daki `5 Ekim 2025` kopyalanmış; diğerleri 2026 | Program yılına göre düzelt: ay ≥ 9 → 2026, ay ≤ 8 → 2027. **Ama** şablondan kalan tarih yıl düzeltilince hafta sonu dışına düşebilir (`5 Ekim 2025 Paz` → `5 Ekim 2026 Pzt`). Düzeltilmiş tarih cumartesi/pazar değilse sütun "tarih şüpheli" olarak işaretlenir ve admin onaylar. Şenlik gibi ortak etkinliklerde tek tarih tüm ekiplere birlikte atanabilir. |
 | Tarih metin olarak yazılmış: `"13 EKİM"`, `"10 Ekim"` | Türkçe ay adlarıyla ayrıştır (büyük/küçük harf ve İ/ı duyarsız), yılı yukarıdaki kuralla ekle. Hafta içine düşen tarih (13 Ekim 2026 Salı) "tarih şüpheli" olur. |
-| Tarih boş ama yoklama verisi var | Sihirbazda o sütun "tarih eksik" olarak gösterilir. Admin tarihi girmeden aktarım tamamlanmaz. Öneri olarak o ekibin günüyle uyumlu en yakın hafta sonu sunulur. |
-| Etkinlik türü yazımları: `"Fotoğraf "` (sonda boşluk), `"Fotoğraf, Liderlik"` | Virgülle böl, kırp, Türkçe büyük/küçük harf duyarsız eşleştir. Birden çok tür → çoklu etiket. Eşleşmeyen tür → sihirbazda eşleme ekranı. |
+| Tarih boş ama yoklama verisi var | Sütunun haftası sıradan çıkarılır, gün ekibin buluşma günüdür. Kural `scripts/excel-overrides.ts`'te durur; tarihi atanamayan sütun varsa yükleme durur. |
+| Etkinlik türü yazımları: `"Fotoğraf "` (sonda boşluk), `"Fotoğraf, Liderlik"` | Virgülle böl, kırp, Türkçe büyük/küçük harf duyarsız eşleştir. Birden çok tür → çoklu etiket. Eşleşmeyen tür → yükleme durur, kullanıcıya sorulur. |
 | Etkinlik türü var, tarih yok, hiç yoklama yok (şablondan kalma boş sütunlar) | Atla. |
 | Doğum tarihi metin: `"23.8.2011"`, `"10/08/2011"`, `"14.1.2011"` | `d.M.yyyy` ve `dd/MM/yyyy` dene. Başarısızsa boş bırak ve işaretle. |
 | Durum: `Devam Ediyor`, `devam`, boş, `" "` | → `active`. `Devamsızlık Sınırında` → `at_risk`. `Çıkarıldı` → `removed`. |
-| Okul adı varyasyonları: "Hüsnü M. Özyeğin Anadolu Lisesi", "Hüsnü M.özyiğin", "Hüsnü M. Özyeğ" | Normalize et (küçük harf, tr, noktalama ve boşluk temizliği). Benzer adları (prefix / Levenshtein) gruplayıp admin onayına sun. Onaylananlar tek `school` olur. |
-| Sınıf sütununda okul adı veya karışık değer (ör. sınıf "10/A" okul sütununda) | Ham değeri `class_label` / `school_raw` alanlarına olduğu gibi aktar, raporla. Sihirbaz bunları tahminle düzeltmez. |
+| Okul adı varyasyonları: "Hüsnü M. Özyeğin Anadolu Lisesi", "Hüsnü M.özyiğin", "Hüsnü M. Özyeğ" | Normalize et (küçük harf, tr, noktalama ve boşluk temizliği). Varyasyonlar `scripts/excel-overrides.ts` içindeki eşleme tablosuyla tek `school`'a bağlanır (okul adları kişisel veri değildir); sonra Ayarlar'dan birleştirilebilir. |
+| Sınıf sütununda okul adı veya karışık değer (ör. sınıf "10/A" okul sütununda) | Ham değeri `class_label` / `school_raw` alanlarına olduğu gibi aktar, raporla. Tahminle düzeltilmez. |
 | Ad soyad büyük/küçük harf karışık ("MUHAMMET ALİ İDEKÇİ", "haktan alim") | Türkçe kurallarla "Başlık Düzeni"ne çevir (`İ/ı` doğru). Orijinali audit diff'inde kalır. |
 | Ana liste ve Yeni Kayıt'ta aynı kişi | Önce geçerli TC ile, yoksa normalize ad soyad ile eşleştir. Eşleşenler birleştirilir (boş alanlar diğerinden doldurulur, çakışan değerler raporlanır). Eşleşmeyen Yeni Kayıt satırları `source = excel_new_registration` ile yeni öğrenci olur. |
 
-### 9.3 Sihirbaz adımları
-1. **Dosya seç** → tarayıcıda ayrıştır.
-2. **Ekipler**: 26 sayfa listelenir. Her biri için lider adı ve sınıf (sayfa adından) gösterilir; admin **cinsiyet** ve **buluşma günü** girer (toplu seçim mümkün) ve lider e-postasını ekler (bu adım lider davetini de oluşturur; boş bırakılabilir).
-3. **Okul eşleme**: bulunan okul adı grupları, birleştirme onayı.
-4. **Etkinlik türü eşleme** + **eksik tarihler**.
-5. **Kuru çalıştırma raporu**: ekip başına öğrenci sayısı, buluşma sayısı, yoklama sayısı ve tüm uyarılar (geçersiz TC, normalize edilemeyen telefon, birleşen ve çakışan kayıtlar). Uyarılar CSV olarak indirilebilir.
-6. **Onayla ve aktar**: tek transaction. Hata olursa hiçbir şey yazılmaz. Sonuç ekranı ve `audit_log` içinde `import` kaydı.
-7. Aktarım **idempotent** olmalı: aynı dosya tekrar yüklenirse kopya oluşmaz (ekip = sayfa adı, öğrenci = TC veya ad+ekip, session = ekip+tarih anahtarlarıyla upsert).
+### 9.3 Yükleme akışı (sihirbaz yok)
+1. `scripts/load-excel.ts <dosya.xlsx>`: dosya repoya girmeden, Claude'un çalışma ortamında okunur. Parser (`lib/import`) çalışır, ardından `lib/import/plan.ts` veritabanına yazılacak satırları üretir.
+2. Belirsiz noktalar kodda **açık kurallarla** çözülür (ekip günü/cinsiyeti, eksik tarihler, okul eşlemesi; bkz. `scripts/excel-overrides.ts`, gerçek kişi verisi içermez). Kurallar kullanıcıyla netleştirilir.
+3. `--dry-run` önce çalışır ve sadece sayımları/uyarıları yazar (ad, TC, telefon yazdırılmaz).
+4. Gerçek yükleme `service_role` ile tek transaction'da yapılır; `audit_log`'a `import` kaydı düşer.
+5. **İdempotent**: tekrar çalıştırılırsa kopya oluşmaz (ekip = sayfa adı, öğrenci = TC veya ad+ekip, session = ekip+tarih). Canlıya geçiş günü son dosyayla bir kez daha çalıştırılabilir; o günden sonra çalıştırılmaz.
 
 Parser (`lib/import/*`) saf TypeScript olmalı ve **sahte bir test workbook'uyla** (testte programatik üretilir, aynı düzen ve aynı kirli veri örnekleriyle) birim testine tabi tutulmalıdır.
 
@@ -507,7 +501,7 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 - [ ] Lider: Ekibim, Yoklama Al (anında kayıt, hata olursa tekrar dene), Yoklamalar listesi, Öğrenciler (liste, detay, ekle, düzenle, durum), tablo/matris görünümü
 - [ ] Ekip Excel'i indirme
 - [ ] Yönetim: Genel Bakış (KPI, yoklama girilmeyenler, ekipler tablosu), ekip detayı (temel), Kullanıcılar, Ayarlar (etkinlik türleri, ekipler, okullar)
-- [ ] **İçe aktarma sihirbazı** (gerçek veri canlıda yüklenir)
+- [ ] **Mevcut verinin yüklenmesi** (`scripts/load-excel.ts`, canlıya çıkmadan önce)
 - [ ] PWA manifest + ikon
 - [ ] Playwright: "lider girer → yoklama alır → yönetim görür" akışı; RLS testleri
 
@@ -550,8 +544,8 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 | 2 | Tayfa logosu ve renkleri. | ✅ Alındı, §8'e işlendi. İleride şeffaf zeminli SVG gelirse PNG'nin yerine konur (engelleyici değil). |
 | 3 | İlk admin e-postası. | ✅ `INITIAL_ADMIN_EMAILS` ortam değişkeniyle çözüldü (§4). Faz 0'da kullanıcıya sorulup girilir. |
 | 4 | KVKK aydınlatma metni. | Belediyeden gelecek. O zamana kadar boş sayfa. |
-| 5 | Supabase mı, başka bir altyapı mı? | Kullanıcı emin değil. Karar verilene kadar şema standart Postgres + SQL migration olarak yazılır. |
-| 6 | Yedekleme (Supabase ücretsiz planında otomatik yedek yok). | Bekliyor. Öneri: Pro plan, ya da admin panelinde "tüm veriyi Excel olarak indir" yedeği. |
-| 7 | Şenlik'in gerçek tarihi (Excel'de şablondan kalan 4/5 Ekim 2025 yazıyor). | Bekliyor. Sihirbazda da sorulabilir. |
-| 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | Bekliyor. Sihirbaz bunları ayrı listeler, admin onaylar. |
+| 5 | Supabase mı, başka bir altyapı mı? | ✅ Supabase, ücretsiz plan. |
+| 6 | Yedekleme. | ✅ Şimdilik yapılmıyor (kullanıcı kararı). Ücretsiz planda otomatik yedek yok. |
+| 7 | Şenlik'in gerçek tarihi (Excel'de şablondan kalan 4/5 Ekim 2025 yazıyor). | Bekliyor. Yükleme kuralına yazılacak. |
+| 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | Analiz: 427 ana liste + 65 (ana listesi boş 3 ekip) + 82 gerçekten yeni + 12 ad varyasyonu (aynı kişi) ≈ 574. 8 kişi başka bir ekibin ana listesinde de var. Hepsi aktarılır; kullanıcı onayı bekleniyor. |
 | 9 | SheetJS sürümü. | npm'deki `xlsx@0.18.5` eski ve bilinen açıkları var (dosya ayrıştırmada). Geliştirme ortamı `cdn.sheetjs.com`'a erişemediği için geçici olarak bu sürüm kullanılıyor; Vercel'e çıkmadan önce `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` ile değiştirilir. |

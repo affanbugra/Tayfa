@@ -1,5 +1,5 @@
-// Tayfa yoklama Excel'ini (CLAUDE.md §9) saf veri yapısına çevirir. Tarayıcıda çalışır;
-// veritabanına bir şey yazmaz. Birleştirme ve eşleme kararları sihirbazda admin onayıyla verilir.
+// Tayfa yoklama Excel'ini (CLAUDE.md §9) saf veri yapısına çevirir; veritabanına bir şey yazmaz.
+// Yükleme script'i (scripts/load-excel.ts) bu çıktıyı kullanır.
 import type { CellObject, WorkBook, WorkSheet } from "xlsx";
 import { cleanText, mapStatus, normalizeClassLabel, normalizeKey, normalizePhone, splitActivityTypes, toTitleCaseTr, type StudentStatus } from "./normalize";
 import { parseBirthDate, parseSessionDate, type SessionDateResult } from "./dates";
