@@ -498,6 +498,15 @@ Kullanıcı teknik değil; adımları ekran ekran, Türkçe tarif et:
 3. **Vercel**: GitHub reposunu (`affanbugra/tayfa`) bağla → ortam değişkenlerini gir → deploy. Ardından Supabase › Auth › URL Configuration kısmına Vercel adresini ekle.
 4. `.env.example` dosyası tüm değişkenleri açıklamalarıyla listeler.
 
+**Faz 0 durumu (28 Ekim 2026):** Supabase hesabı ve `tayfa-yoklama` projesi (Frankfurt, Free) açıldı. Bulut oturumundan Supabase'e erişilemediği için kurulum kullanıcının bilgisayarındaki yerel Claude Code oturumunda devam eder. Kullanıcı yorgun ve teknik değil: **her adımda en az tıklama**, mümkün olan her şeyi CLI ile Claude yapar.
+Yerel oturumda sıradaki adımlar:
+1. `pnpm install`, ardından `npx supabase login` (tarayıcıda tek onay) ve `npx supabase link --project-ref <ref>` (proje ref'i `npx supabase projects list` ile bulunur; DB şifresi sorulursa kullanıcının not ettiği şifre).
+2. Şema: `npx supabase db push` (`supabase/migrations/*.sql`).
+3. Veri: kullanıcıdan Excel dosyasının yolunu iste (repoya kopyalama). `DATABASE_URL` = Supabase › Connect › Session pooler bağlantısı. Önce `pnpm load-excel <dosya>` (kuru çalıştırma), sonra `INITIAL_ADMIN_EMAILS=affanbugraozaytas@gmail.com pnpm load-excel <dosya> --apply`.
+4. Google girişi: Google Cloud'da OAuth istemcisi (kullanıcıyla ekran ekran), Client ID/Secret Supabase › Authentication › Providers › Google'a.
+5. Vercel: repoyu içe aktar, ortam değişkenleri (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `DATABASE_URL` transaction pooler 6543), deploy; Supabase › Auth › URL Configuration'a Vercel adresi.
+6. Kurulum bitince kullanıcıya oluşturduğu Supabase erişim anahtarlarını silmesini hatırlat.
+
 ### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
 - [x] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
 - [x] Şema + RLS + trigger'lar + seed (sadece sahte veri) + ilk admin daveti
