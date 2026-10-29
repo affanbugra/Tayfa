@@ -37,7 +37,8 @@ export const tr = {
   gender: { K: "Kız", E: "Erkek" } as Record<string, string>,
   unknown: "Belirtilmedi",
 
-  studentStatus: { active: "Devam Ediyor", at_risk: "Devamsızlık Sınırında", removed: "Çıkarıldı" } as Record<string, string>,
+  studentStatus: { active: "Devam Ediyor", at_risk: "Devamsızlık Sınırında", left: "Ayrıldı", removed: "Çıkarıldı" } as Record<string, string>,
+  studentStatusShort: { active: "Devam", at_risk: "Sınırda", left: "Ayrıldı", removed: "Çıkarıldı" } as Record<string, string>,
   attendance: { present: "Geldi", absent: "Gelmedi", excused: "Mazeret", unmarked: "İşaretsiz" },
   sessionStatus: { held: "Yapıldı", postponed: "Ertelendi", cancelled: "İptal" } as Record<string, string>,
 
@@ -176,6 +177,11 @@ export const tr = {
 
   sheet: {
     backToSheet: "Tabloya dön",
+    statusCol: "Durum",
+    changeStatus: "Durumu değiştir",
+    goneTitle: "Ekipten ayrılanlar",
+    goneHint: "Ayrılan ve çıkarılan öğrenciler ekip sayısına ve istatistiklere girmez, geçmiş yoklamaları korunur.",
+    optional: "isteğe bağlı",
     planned: "Planlandı",
     plannedCell: "Planlandı, günü gelince işaretlenir",
     newSession: "Yeni buluşma",
@@ -212,6 +218,7 @@ export const tr = {
     tabSummary: "Özet",
     tabsLabel: "Ekipler",
     trend: "Eğilim",
+    lastWeekRate: "Geçen hafta katılım",
     teamSettings: "Ekip ayarları",
     addEmail: "e-posta ekle",
     signedInShort: "Lider girdi",

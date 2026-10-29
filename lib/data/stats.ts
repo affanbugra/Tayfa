@@ -77,7 +77,7 @@ export async function countFrequentAbsentees(tx: Tx): Promise<number> {
       join public.teams t on t.id = s.team_id and t.is_active
       join public.attendance a on a.student_id = s.id and a.status = 'absent'
       join public.sessions se on se.id = a.session_id and se.status = 'held'
-      where s.status <> 'removed'
+      where s.status in ('active', 'at_risk')
       group by s.id having count(*) >= 3
     ) x`;
   return r.n;

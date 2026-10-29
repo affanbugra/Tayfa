@@ -55,7 +55,28 @@ export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: num
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-border bg-bg">
+      {/* Telefon: her ekip iki satır, yana kaydırma yok */}
+      <ul className="divide-y divide-border rounded-lg border border-border bg-bg md:hidden">
+        {sorted.map((r) => (
+          <li key={r.id} className="space-y-1.5 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Link href={`/yonetim/ekipler/${r.id}`} className="font-medium text-brand-strong">{r.name}</Link>
+              <TeamTags row={r} onEdit={() => setEdit(r)} />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-text-muted">
+              <span className="w-16 shrink-0 tabular-nums">{r.active} {tr.sheet.students.toLowerCase()}</span>
+              <div className="min-w-0 flex-1">
+                <RateCell value={r.rate} average={average} />
+              </div>
+              {r.atRisk > 0 && <span className="shrink-0 font-semibold text-at-risk">{tr.sheet.atRisk} {r.atRisk}</span>}
+              <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold", weekLook[r.week])}>
+                {r.week === "entered" ? tr.sheet.entered : r.week === "notEntered" ? tr.sheet.notEntered : tr.sheet.waiting}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-lg border border-border bg-bg md:block">
         <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="text-left text-xs text-text-muted">
@@ -74,25 +95,7 @@ export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: num
                 <td className="border-b border-border px-3 py-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Link href={`/yonetim/ekipler/${r.id}`} className="font-medium whitespace-nowrap text-brand-strong hover:underline">{r.name}</Link>
-                    <button
-                      type="button"
-                      onClick={() => setEdit(r)}
-                      aria-label={`${r.name}: ${tr.sheet.teamSettings}`}
-                      className="inline-flex h-6 items-center gap-1 rounded border border-border px-1.5 text-[11px] text-text-muted hover:border-brand-strong hover:text-brand-strong"
-                    >
-                      {r.day || r.gender ? [dayShort[r.day], tr.gender[r.gender]].filter(Boolean).join(" · ") : <Settings2 size={12} aria-hidden />}
-                    </button>
-                    {!r.email ? (
-                      <button type="button" onClick={() => setEdit(r)} className="inline-flex h-6 items-center gap-1 text-[11px] font-medium text-brand-strong hover:underline">
-                        <Mail size={12} aria-hidden />
-                        {tr.sheet.addEmail}
-                      </button>
-                    ) : (
-                      <span title={r.email} className={cn("inline-flex h-6 items-center gap-1 text-[11px]", r.signedIn ? "text-present" : "text-text-muted")}>
-                        <Mail size={12} aria-hidden />
-                        {r.signedIn ? tr.sheet.signedInShort : tr.sheet.invitedShort}
-                      </span>
-                    )}
+                    <TeamTags row={r} onEdit={() => setEdit(r)} />
                   </div>
                 </td>
                 <td className="border-b border-border px-3 py-2 text-right tabular-nums">{r.active}</td>
@@ -115,6 +118,33 @@ export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: num
         </table>
       </div>
       {edit && <TeamSettings row={edit} onClose={() => setEdit(null)} />}
+    </>
+  );
+}
+
+/** Ekip adının yanındaki küçük ayar etiketleri: gün · cinsiyet ve lider e-postası durumu. */
+function TeamTags({ row: r, onEdit }: { row: TeamGridRow; onEdit: () => void }) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`${r.name}: ${tr.sheet.teamSettings}`}
+        className="inline-flex h-6 items-center gap-1 rounded border border-border px-1.5 text-[11px] text-text-muted hover:border-brand-strong hover:text-brand-strong"
+      >
+        {r.day || r.gender ? [dayShort[r.day], tr.gender[r.gender]].filter(Boolean).join(" · ") : <Settings2 size={12} aria-hidden />}
+      </button>
+      {!r.email ? (
+        <button type="button" onClick={onEdit} className="inline-flex h-6 items-center gap-1 text-[11px] font-medium text-brand-strong hover:underline">
+          <Mail size={12} aria-hidden />
+          {tr.sheet.addEmail}
+        </button>
+      ) : (
+        <span title={r.email} className={cn("inline-flex h-6 items-center gap-1 text-[11px]", r.signedIn ? "text-present" : "text-text-muted")}>
+          <Mail size={12} aria-hidden />
+          {r.signedIn ? tr.sheet.signedInShort : tr.sheet.invitedShort}
+        </span>
+      )}
     </>
   );
 }

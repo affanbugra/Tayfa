@@ -57,11 +57,14 @@ export function Sparkline({ values, label }: { values: (number | null)[]; label:
 export type LineSeries = { name: string; color: string; values: (number | null)[] };
 
 /** Zaman içinde oran (0–%100). Tek eksen, artı imleç ve ipucu, uçta doğrudan etiket. */
-export function RateLineChart({ labels, series, height = 240, caption }: { labels: string[]; series: LineSeries[]; height?: number; caption: string }) {
+export function RateLineChart({ labels, series, height: tall = 240, caption }: { labels: string[]; series: LineSeries[]; height?: number; caption: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
+  const height = width > 0 && width < 520 ? Math.min(tall, 180) : tall;
   const [hover, setHover] = useState<number | null>(null);
   const padL = 36;
-  const padR = series.length > 1 ? 100 : 44;
+  // Dar ekranda uç etiketi yok (isimler altta, değerler ipucunda); genişte etiket son noktanın yanında.
+  const narrow = width < 520;
+  const padR = narrow ? 12 : series.length > 1 ? 84 : 44;
   const padT = 12;
   const padB = 24;
   const innerW = Math.max(0, width - padL - padR);
@@ -111,7 +114,7 @@ export function RateLineChart({ labels, series, height = 240, caption }: { label
             ))}
             {labels.map((l, i) =>
               i % every === 0 || i === n - 1 ? (
-                <text key={i} x={x(i)} y={height - 6} textAnchor="middle" className="fill-text-muted text-[11px]">
+                <text key={i} x={x(i)} y={height - 6} textAnchor={n > 1 && i === 0 ? "start" : n > 1 && i === n - 1 ? "end" : "middle"} className="fill-text-muted text-[11px]">
                   {l}
                 </text>
               ) : null,
@@ -126,8 +129,8 @@ export function RateLineChart({ labels, series, height = 240, caption }: { label
               return v === null || v === undefined ? null : <circle key={s.name} cx={x(i)} cy={y(v)} r={4} fill={s.color} stroke="var(--bg)" strokeWidth={2} />;
             })}
             {/* Uçta doğrudan etiket (çakışırsa aşağıdakini kaydır) */}
-            {endLabels(series, y).map((l) => (
-              <text key={l.name} x={padL + innerW + 8} y={l.y} dy="0.32em" className="fill-text text-[11px] font-semibold">
+            {!narrow && endLabels(series, y).map((l) => (
+              <text key={l.name} x={x(l.i) + 8} y={l.y} dy="0.32em" className="fill-text text-[11px] font-semibold">
                 {series.length > 1 ? `${l.name} ` : ""}
                 {pct(l.v)}
               </text>
@@ -172,9 +175,9 @@ function endLabels(series: LineSeries[], y: (v: number) => number) {
     .map((s) => {
       const i = lastIndex(s.values);
       const v = i === -1 ? null : s.values[i];
-      return v === null ? null : { name: s.name, v, y: y(v) };
+      return v === null ? null : { name: s.name, v, y: y(v), i };
     })
-    .filter((l): l is { name: string; v: number; y: number } => l !== null)
+    .filter((l): l is { name: string; v: number; y: number; i: number } => l !== null)
     .sort((a, b) => a.y - b.y);
   for (let k = 1; k < ls.length; k++) if (ls[k].y - ls[k - 1].y < 14) ls[k].y = ls[k - 1].y + 14;
   return ls;

@@ -5,6 +5,7 @@ import type { Viewer } from "@/lib/auth";
 import { addDaysIso, formatDateShort, todayIstanbul, weekStartOf } from "@/lib/dates";
 import { asUser } from "@/lib/db";
 import { getActivityTypes, getPlanForWeek, getTeam } from "@/lib/data/queries";
+import { isCurrent } from "@/lib/students";
 import { getTeamSheet, type TeamSheet as Sheet } from "@/lib/data/sheet";
 import { getProgramWeekRates } from "@/lib/data/stats";
 import { tr } from "@/lib/i18n/tr";
@@ -25,7 +26,7 @@ export async function TeamSheetPage({ viewer, teamId }: { viewer: Viewer; teamId
   });
   if (!data) notFound();
   const { team, sheet, types, plan, program } = data;
-  const active = sheet.students.filter((s) => s.status !== "removed").length;
+  const active = sheet.students.filter((s) => isCurrent(s.status)).length;
   // Yeni buluşmanın varsayılan tarihi: hafta sonuysa bugün, değilse ekibin geçen buluşma günü.
   const ws = weekStartOf(today);
   const weekend = today === ws || today === addDaysIso(ws, 1);
@@ -35,9 +36,9 @@ export async function TeamSheetPage({ viewer, teamId }: { viewer: Viewer; teamId
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 pt-3 md:px-6">
-        <h1 className="font-display text-lg font-semibold text-text md:text-xl">{team.name}</h1>
-        <p className="text-sm text-text-muted">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 pt-2 md:px-6 md:pt-3">
+        <h1 className="font-display text-base font-semibold text-text md:text-xl">{team.name}</h1>
+        <p className="text-xs text-text-muted md:text-sm">
           {[team.meeting_day ? tr.days[team.meeting_day] : null, `${active} ${tr.sheet.students.toLowerCase()}`].filter(Boolean).join(" · ")}
           {team.schools.length > 0 && <span className="hidden md:inline"> · {team.schools.slice(0, 2).join(", ")}</span>}
         </p>
@@ -48,7 +49,6 @@ export async function TeamSheetPage({ viewer, teamId }: { viewer: Viewer; teamId
           </p>
         )}
       </div>
-      <TeamStats data={stats} />
       <TeamSheet
         teamId={team.id}
         students={sheet.students}
@@ -60,6 +60,7 @@ export async function TeamSheetPage({ viewer, teamId }: { viewer: Viewer; teamId
         defaultTypeIds={plan.map((p) => p.activity_type_id)}
         teamQuery={viewer.role === "admin" ? `?ekip=${team.id}` : ""}
         exportHref={`/api/export/team/${team.id}`}
+        stats={<TeamStats data={stats} />}
       />
     </div>
   );
@@ -72,6 +73,7 @@ function teamStats(sheet: Sheet, program: { week_start: string; present: number;
     let present = 0;
     let total = 0;
     for (const st of sheet.students) {
+      if (!isCurrent(st.status)) continue;
       const m = sheet.marks[`${st.id}:${se.id}`];
       if (!m) continue;
       total++;
@@ -88,7 +90,7 @@ function teamStats(sheet: Sheet, program: { week_start: string; present: number;
   const absences = new Map<string, number>();
   for (const r of perSession)
     for (const st of sheet.students) if (sheet.marks[`${st.id}:${r.se.id}`]?.status === "absent") absences.set(st.id, (absences.get(st.id) ?? 0) + 1);
-  const current = sheet.students.filter((st) => st.status !== "removed");
+  const current = sheet.students.filter((st) => isCurrent(st.status));
   const lastMarked = [...perSession].reverse().find((r) => r.total > 0);
   return {
     last: lastMarked ? { label: formatDateShort(lastMarked.se.date), present: lastMarked.present, total: lastMarked.total } : null,
@@ -98,11 +100,6 @@ function teamStats(sheet: Sheet, program: { week_start: string; present: number;
     active: current.length,
     held: held.length,
     watch: current.filter((st) => st.status === "at_risk" || (absences.get(st.id) ?? 0) >= 3).length,
-    columns: perSession.slice(-12).map((r) => ({
-      label: formatDateShort(r.se.date),
-      sub: r.se.types.join(", ") || "—",
-      value: ratio(r),
-      detail: `${r.present}/${r.total}`,
-    })),
+    trend: perSession.slice(-12).map((r) => ratio(r)),
   };
 }

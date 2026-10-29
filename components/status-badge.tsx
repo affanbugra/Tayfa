@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 const styles: Record<string, string> = {
   active: "bg-present-bg text-present",
   at_risk: "bg-excused-bg text-at-risk",
+  left: "bg-surface text-removed",
   removed: "bg-surface text-removed",
 };
 

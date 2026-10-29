@@ -109,24 +109,6 @@ export async function setAttendance(input: {
   }
 }
 
-export async function markAllPresent(sessionId: string, studentIds: string[]): Promise<MarkResult> {
-  try {
-    const viewer = await requireViewer();
-    const v = z.object({ sessionId: uuid, studentIds: z.array(uuid) }).parse({ sessionId, studentIds });
-    await asUser(viewer.userId, async (tx) => {
-      for (const sid of v.studentIds) {
-        await tx`
-          insert into public.attendance (session_id, student_id, status, updated_by)
-          values (${v.sessionId}, ${sid}, 'present', ${viewer.userId})
-          on conflict (session_id, student_id) do nothing`;
-      }
-    });
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "Kaydedilemedi" };
-  }
-}
-
 export type FormState = { error?: string; ok?: boolean } | null;
 
 export async function quickAddStudent(teamId: string, fullName: string): Promise<{ ok: true; id: string; fullName: string } | { ok: false; error: string }> {

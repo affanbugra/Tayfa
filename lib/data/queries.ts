@@ -2,7 +2,8 @@
 import "server-only";
 import type { Tx } from "@/lib/db";
 
-export type StudentStatus = "active" | "at_risk" | "removed";
+import type { StudentStatus } from "@/lib/students";
+export type { StudentStatus };
 export type AttendanceStatus = "present" | "absent" | "excused";
 export type SessionStatus = "held" | "postponed" | "cancelled";
 
@@ -23,7 +24,7 @@ export async function getTeam(tx: Tx, teamId: string): Promise<TeamInfo | null> 
     select t.id, t.name, t.leader_name, p.email as leader_email, t.grade, t.gender, t.meeting_day, t.is_active,
       coalesce((select array_agg(distinct sc.name order by sc.name) from public.students s
                 join public.schools sc on sc.id = s.school_id
-                where s.team_id = t.id and s.status <> 'removed'), '{}') as schools
+                where s.team_id = t.id and s.status in ('active', 'at_risk')), '{}') as schools
     from public.teams t left join public.profiles p on p.id = t.leader_id
     where t.id = ${teamId}`;
   return t ?? null;

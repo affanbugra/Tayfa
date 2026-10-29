@@ -96,7 +96,7 @@ export async function updateStudent(_prev: FormState, formData: FormData): Promi
 export async function changeStudentStatus(_prev: FormState, formData: FormData): Promise<FormState> {
   const viewer = await requireViewer();
   const parsed = z
-    .object({ studentId: uuid, status: z.enum(["active", "at_risk", "removed"]), reason: z.string().trim().max(500) })
+    .object({ studentId: uuid, status: z.enum(["active", "at_risk", "left", "removed"]), reason: z.string().trim().max(500) })
     .safeParse({ studentId: formData.get("studentId"), status: formData.get("status"), reason: formData.get("reason") ?? "" });
   if (!parsed.success) return { error: "Bilgiler geçersiz" };
   const v = parsed.data;
@@ -127,4 +127,26 @@ export async function moveStudent(formData: FormData) {
   await asUser(viewer.userId, (tx) => tx`update public.students set team_id = ${v.teamId} where id = ${v.studentId}`);
   revalidatePath("/", "layout");
   redirect(`/ogrenciler/${v.studentId}?ekip=${v.teamId}`);
+}
+
+/** Ekip tablosundan durum değiştirme (sayfa değişmez). "Çıkarıldı" için gerekçe zorunlu. */
+export async function setStudentStatus(
+  studentId: string,
+  status: "active" | "at_risk" | "left" | "removed",
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z
+    .object({ studentId: uuid, status: z.enum(["active", "at_risk", "left", "removed"]), reason: z.string().trim().max(500) })
+    .safeParse({ studentId, status, reason });
+  if (!parsed.success) return { ok: false, error: "Bilgiler geçersiz" };
+  const v = parsed.data;
+  if (v.status === "removed" && !v.reason) return { ok: false, error: "Çıkarıldı için gerekçe zorunlu" };
+  try {
+    const viewer = await requireViewer();
+    await asUser(viewer.userId, (tx) => tx`update public.students set status = ${v.status}, status_reason = ${v.reason || null} where id = ${v.studentId}`);
+  } catch {
+    return { ok: false, error: "Kaydedilemedi" };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

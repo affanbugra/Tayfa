@@ -36,7 +36,7 @@ export async function getTeamsOverview(tx: Tx, weekStart: string): Promise<TeamO
     select t.id, t.name, t.leader_name, pr.email as leader_email,
       (select i.email from public.invitations i where i.team_id = t.id and i.role = 'leader' order by i.created_at desc limit 1) as invited_email,
       t.grade, t.gender, t.meeting_day,
-      (select count(*)::int from public.students s where s.team_id = t.id and s.status <> 'removed') as active_students,
+      (select count(*)::int from public.students s where s.team_id = t.id and s.status in ('active', 'at_risk')) as active_students,
       (select count(*)::int from public.students s where s.team_id = t.id and s.status = 'at_risk') as at_risk,
       (select max(date) from public.sessions se where se.team_id = t.id and exists (select 1 from public.attendance a where a.session_id = se.id)) as last_session,
       coalesce((select sum(h.pc)::int from held h where h.team_id = t.id and h.w between 0 and 3), 0) as recent_present,

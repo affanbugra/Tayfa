@@ -14,7 +14,7 @@ export function StudentStatusForm({ studentId, status, reason }: { studentId: st
       <input type="hidden" name="studentId" value={studentId} />
       <Field label={tr.students.changeStatus}>
         <select name="status" value={value} onChange={(e) => setValue(e.target.value)} className={inputClass}>
-          {(["active", "at_risk", "removed"] as const).map((s) => (
+          {(["active", "at_risk", "left", "removed"] as const).map((s) => (
             <option key={s} value={s}>{tr.studentStatus[s]}</option>
           ))}
         </select>

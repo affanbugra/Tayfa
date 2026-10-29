@@ -2,16 +2,18 @@
 
 // Ekip tablosu: Excel'deki lider sayfasının karşılığı. Satırlar öğrenciler, sütunlar buluşmalar.
 // Hücreye dokunmak işareti döndürür (Geldi → Gelmedi → Mazeret → boş) ve anında kaydeder.
-import { AlertCircle, Copy, Download, Pencil, Plus, Search, UserPlus, X } from "lucide-react";
+import { AlertCircle, Copy, Download, Pencil, Plus, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { markAllPresent, quickAddStudent, removeSession, saveSession, setAttendance } from "@/app/actions/attendance";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { quickAddStudent, removeSession, saveSession, setAttendance } from "@/app/actions/attendance";
+import { setStudentStatus } from "@/app/actions/students";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import type { SheetMark, SheetSession, SheetStudent } from "@/lib/data/sheet";
 import type { AttendanceStatus } from "@/lib/data/queries";
+import { isCurrent, type StudentStatus } from "@/lib/students";
 import { addDaysIso, formatDateShort } from "@/lib/dates";
 import { tr } from "@/lib/i18n/tr";
 
@@ -24,6 +26,12 @@ const look: Record<Status, string> = {
   present: "bg-present-bg text-present",
   absent: "bg-absent-bg text-absent",
   excused: "bg-excused-bg text-excused",
+};
+const statusLook: Record<StudentStatus, string> = {
+  active: "border border-border bg-bg text-text-muted",
+  at_risk: "bg-excused-bg text-excused",
+  left: "border border-border bg-bg text-removed",
+  removed: "border border-border bg-bg text-removed",
 };
 const weekday = (iso: string) => new Intl.DateTimeFormat("tr-TR", { weekday: "short", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
 
@@ -38,6 +46,7 @@ export function TeamSheet({
   defaultTypeIds,
   teamQuery,
   exportHref,
+  stats,
 }: {
   teamId: string;
   students: SheetStudent[];
@@ -51,15 +60,17 @@ export function TeamSheet({
   /** Yöneticide "?ekip=…", liderde boş: öğrenci sayfası bağlantılarına eklenir */
   teamQuery: string;
   exportHref: string;
+  /** Araç çubuğunun yanındaki küçük istatistik etiketleri */
+  stats?: ReactNode;
 }) {
   const router = useRouter();
   // Sunucudan gelen işaretlerin üstüne, bu ekranda yapılan değişiklikler yazılır (null = silindi).
   const [overrides, setOverrides] = useState<Record<string, SheetMark | null>>({});
   const [cells, setCells] = useState<Record<string, CellState>>({});
-  const [query, setQuery] = useState("");
-  const [showRemoved, setShowRemoved] = useState(false);
+  const [statusOf, setStatusOf] = useState<Record<string, StudentStatus>>({});
   const [editor, setEditor] = useState<SheetSession | "new" | null>(null);
   const [noteFor, setNoteFor] = useState<{ studentId: string; sessionId: string } | null>(null);
+  const [statusFor, setStatusFor] = useState<SheetStudent | null>(null);
   const [adding, setAdding] = useState(false);
   const versions = useRef<Record<string, number>>({});
   const scroller = useRef<HTMLDivElement>(null);
@@ -68,6 +79,7 @@ export function TeamSheet({
     const key = `${studentId}:${sessionId}`;
     return key in overrides ? overrides[key] : (serverMarks[key] ?? null);
   };
+  const statusOfStudent = (s: SheetStudent) => statusOf[s.id] ?? s.status;
 
   // En yeni buluşmalar sağda; açılışta oraya kaydır.
   useEffect(() => {
@@ -107,84 +119,114 @@ export function TeamSheet({
     void write(studentId, sessionId, status ? { status, note: status === "excused" ? (current?.note ?? null) : null } : null);
   }
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("tr");
-    return students.filter((s) => (showRemoved || s.status !== "removed") && (!q || s.full_name.toLocaleLowerCase("tr").includes(q)));
-  }, [students, query, showRemoved]);
+  // Ekipte olanlar üstte; ayrılan ve çıkarılanlar en altta, soluk (Excel'deki "Devam Durumu" gibi).
+  const current = students.filter((s) => isCurrent(statusOfStudent(s)));
+  const gone = students.filter((s) => !isCurrent(statusOfStudent(s)));
 
   // Planlanmış (ileri tarihli) buluşmalar görünür ama günü gelene kadar işaretlenmez ve sayılmaz.
   const isFuture = (se: SheetSession) => se.date > today;
   const absences = (studentId: string) =>
     sessions.reduce((n, se) => n + (se.status === "held" && !isFuture(se) && markOf(studentId, se.id)?.status === "absent" ? 1 : 0), 0);
-
   const lastHeld = [...sessions].reverse().find((s) => s.status === "held" && !isFuture(s));
-  const roster = students.filter((s) => s.status !== "removed");
-  const unmarkedInLast = lastHeld ? roster.filter((s) => !markOf(s.id, lastHeld.id)) : [];
-
-  async function allPresent() {
-    if (!lastHeld || unmarkedInLast.length === 0) return;
-    const ids = unmarkedInLast.map((s) => s.id);
-    const keys = ids.map((id) => `${id}:${lastHeld.id}`);
-    setOverrides((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, { status: "present" as const, note: null }])) }));
-    setCells((c) => ({ ...c, ...Object.fromEntries(keys.map((k) => [k, "saving" as const])) }));
-    const res = await markAllPresent(lastHeld.id, ids);
-    setCells((c) => {
-      const copy = { ...c };
-      for (const k of keys) {
-        if (res.ok) delete copy[k];
-        else copy[k] = "error";
-      }
-      return copy;
-    });
-  }
-
   const errors = Object.values(cells).filter((c) => c === "error").length;
+
+  const row = (s: SheetStudent) => {
+    const abs = absences(s.id);
+    const status = statusOfStudent(s);
+    const out = !isCurrent(status);
+    const pill = (
+      <button
+        type="button"
+        onClick={() => setStatusFor({ ...s, status })}
+        aria-label={`${s.full_name}: ${tr.sheet.changeStatus} (${tr.studentStatus[status]})`}
+        className={cn("inline-flex h-6 shrink-0 items-center rounded px-1.5 text-[11px] font-semibold whitespace-nowrap", statusLook[status])}
+      >
+        {tr.studentStatusShort[status]}
+      </button>
+    );
+    return (
+      <tr key={s.id} className={out ? "text-removed" : undefined}>
+        <td className={cn("sticky left-0 z-10 border-r border-b border-border px-2 py-0.5 md:px-3", out ? "bg-surface" : "bg-bg")}>
+          <Link href={`/ogrenciler/${s.id}${teamQuery}`} className="block truncate text-[13px] leading-5 font-medium hover:text-brand-strong md:text-sm">
+            {s.full_name}
+          </Link>
+          <span className="flex items-center gap-1.5 md:hidden">
+            {pill}
+            {!out && <span className={cn("truncate text-[11px]", abs >= 3 ? "font-semibold text-absent" : "text-text-muted")}>{tr.sheet.absencesUnder(abs)}</span>}
+          </span>
+        </td>
+        <Td className="hidden md:table-cell">{pill}</Td>
+        <Td className="hidden md:table-cell">{s.phone ? <Phone value={s.phone} /> : <Muted />}</Td>
+        <Td className="hidden md:table-cell">{s.parent_phone ? <Phone value={s.parent_phone} /> : <Muted />}</Td>
+        <Td className="hidden max-w-44 truncate lg:table-cell" title={s.school ?? undefined}>{s.school ?? <Muted />}</Td>
+        <Td className="hidden lg:table-cell">{s.class_label ?? <Muted />}</Td>
+        <Td className={cn("hidden border-r text-center font-semibold md:table-cell", abs >= 3 && !out && "text-absent")}>{abs}</Td>
+        {sessions.map((se) => {
+          const key = `${s.id}:${se.id}`;
+          const mark = markOf(s.id, se.id);
+          const state = cells[key];
+          const last = se.id === lastHeld?.id;
+          if (se.status !== "held") return <td key={se.id} className="border-b border-border bg-surface" />;
+          if (isFuture(se)) return <td key={se.id} className="border-b border-border bg-accent-tint/50" aria-label={tr.sheet.plannedCell} />;
+          return (
+            <td key={se.id} className={cn("border-b border-border px-0.5 py-0.5 md:px-1", last && "bg-brand-tint")}>
+              <div className="group/cell relative">
+                <button
+                  type="button"
+                  onClick={() => cycle(s.id, se.id)}
+                  aria-label={`${s.full_name}, ${formatDateShort(se.date)}: ${mark ? tr.attendance[mark.status] : tr.sheet.cellEmpty}`}
+                  title={mark?.note ?? undefined}
+                  className={cn(
+                    "flex h-9 w-full items-center justify-center rounded-md text-xs font-semibold transition-colors md:h-10 md:text-[13px]",
+                    mark ? look[mark.status] : "border border-dashed border-border text-text-muted hover:bg-surface",
+                    out && "opacity-60",
+                    state === "saving" && "opacity-60",
+                    state === "error" && "ring-2 ring-absent",
+                  )}
+                >
+                  {mark ? tr.attendance[mark.status] : "—"}
+                </button>
+                {mark?.status === "excused" && (
+                  <button
+                    type="button"
+                    onClick={() => setNoteFor({ studentId: s.id, sessionId: se.id })}
+                    aria-label={`${tr.sheet.excuseTitle}: ${s.full_name}`}
+                    title={mark.note ?? tr.sheet.excuseTitle}
+                    className={cn(
+                      // Excel'deki yorum işareti gibi köşede üçgen. Not yoksa fareyle üstüne gelince görünür.
+                      "absolute top-0 right-0 flex size-6 items-start justify-end",
+                      !mark.note && "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/cell:opacity-100 focus-visible:opacity-100",
+                    )}
+                  >
+                    <span className={cn("block size-2.5 rounded-tr-md [clip-path:polygon(0_0,100%_0,100%_100%)]", mark.note ? "bg-excused" : "bg-text-muted/50")} />
+                  </button>
+                )}
+              </div>
+            </td>
+          );
+        })}
+        <td className="border-b border-border" />
+      </tr>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Araç çubuğu: telefonda iki satır (düğmeler, arama), masaüstünde tek satır */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 md:px-6">
-        <Button type="button" onClick={() => setEditor("new")} className="px-3 md:px-4">
+      {/* Tek satır: düğmeler solda, istatistik etiketleri yanında (telefonda yana kayar) */}
+      <div className="flex items-center gap-2 border-b border-border px-4 py-2 md:px-6">
+        <Button type="button" onClick={() => setEditor("new")} className="min-h-10 shrink-0 px-3">
           <Plus size={18} aria-hidden />
           <span className="md:hidden">{tr.sheet.newSessionShort}</span>
           <span className="hidden md:inline">{tr.sheet.newSession}</span>
         </Button>
-        {lastHeld && (
-          <Button type="button" variant="secondary" onClick={allPresent} disabled={unmarkedInLast.length === 0} className="px-3 md:px-4">
-            <span className="md:hidden">{tr.sheet.allPresentShort}</span>
-            <span className="hidden md:inline">{tr.sheet.allPresent}</span>
-          </Button>
-        )}
-        <div className="ml-auto flex items-center gap-1.5 md:order-last md:gap-2">
-          <Button type="button" variant="secondary" onClick={() => setAdding(true)} aria-label={tr.sheet.addStudent} className="px-3">
-            <UserPlus size={18} aria-hidden />
-            <span className="hidden lg:inline">{tr.sheet.addStudent}</span>
-          </Button>
-          <a href={exportHref} aria-label={tr.team.downloadExcel} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-text hover:bg-surface">
-            <Download size={18} aria-hidden />
-            <span className="hidden lg:inline">{tr.team.downloadExcel}</span>
-          </a>
-        </div>
-        <div className="flex basis-full items-center gap-2 md:basis-auto md:flex-1">
-        <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border px-3 md:max-w-xs">
-          <Search size={16} className="shrink-0 text-text-muted" aria-hidden />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tr.sheet.search}
-            aria-label={tr.sheet.search}
-            className="w-full min-w-0 bg-transparent text-sm outline-none"
-          />
-        </label>
-        <label className="flex min-h-11 items-center gap-2 px-1 text-sm text-text" title={tr.sheet.showRemoved}>
-          <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} className="size-4 accent-[var(--brand-strong)]" />
-          <span className="hidden lg:inline">{tr.sheet.showRemoved}</span>
-          <span className="lg:hidden">{tr.sheet.removedShort}</span>
-        </label>
-        </div>
+        <button type="button" onClick={() => setAdding(true)} aria-label={tr.sheet.addStudent} title={tr.sheet.addStudent} className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-text hover:bg-surface">
+          <UserPlus size={18} aria-hidden />
+        </button>
+        <a href={exportHref} aria-label={tr.team.downloadExcel} title={tr.team.downloadExcel} className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-text hover:bg-surface">
+          <Download size={18} aria-hidden />
+        </a>
+        {stats && <div className="-mr-4 min-w-0 flex-1 overflow-x-auto pr-4 md:mr-0 md:pr-0">{stats}</div>}
       </div>
-      <p className="hidden px-6 pt-2 text-xs text-text-muted md:block">{tr.sheet.hint}</p>
       {errors > 0 && (
         <p className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-absent-bg px-3 py-2 text-sm text-absent md:mx-6" role="alert">
           <AlertCircle size={16} aria-hidden />
@@ -193,12 +235,13 @@ export function TeamSheet({
       )}
 
       {/* Tablo */}
-      <div className="min-h-0 flex-1 px-0 pt-2 pb-4 md:px-6">
-        <div ref={scroller} className="max-h-[calc(100dvh-170px)] overflow-auto border-y border-border bg-bg md:rounded-lg md:border">
+      <div className="min-h-0 flex-1 px-0 pb-4 md:px-6 md:pt-2">
+        <div ref={scroller} className="max-h-[calc(100dvh-150px)] overflow-auto border-b border-border bg-bg md:rounded-lg md:border">
           <table className="border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
-                <Th className="sticky left-0 z-30 w-36 min-w-36 border-r md:w-56 md:min-w-56">{tr.sheet.name}</Th>
+                <Th className="sticky left-0 z-30 w-36 min-w-36 border-r md:w-52 md:min-w-52">{tr.sheet.name}</Th>
+                <Th className="hidden md:table-cell">{tr.sheet.statusCol}</Th>
                 <Th className="hidden min-w-40 md:table-cell">{tr.sheet.phone}</Th>
                 <Th className="hidden min-w-32 md:table-cell">{tr.sheet.parent}</Th>
                 <Th className="hidden min-w-44 lg:table-cell">{tr.sheet.school}</Th>
@@ -206,12 +249,12 @@ export function TeamSheet({
                 <Th className="hidden min-w-20 border-r text-center md:table-cell">{tr.sheet.absences}</Th>
                 {sessions.map((se) => (
                   <th key={se.id} className={cn("sticky top-0 z-20 border-b border-border p-0 text-left align-bottom font-normal", se.id === lastHeld?.id ? "bg-brand-tint shadow-[inset_0_3px_0_var(--accent)]" : "bg-surface")}>
-                    <button type="button" onClick={() => setEditor(se)} className="group block w-[84px] px-2 py-2 text-left md:w-[104px]" aria-label={`${tr.sheet.editSession}: ${formatDateShort(se.date)}`}>
+                    <button type="button" onClick={() => setEditor(se)} className="group block w-[78px] px-1.5 py-1.5 text-left md:w-[104px] md:px-2 md:py-2" aria-label={`${tr.sheet.editSession}: ${formatDateShort(se.date)}`}>
                       <span className="flex items-center justify-between gap-1 text-xs font-semibold text-text md:text-[13px]">
                         <span>
                           {formatDateShort(se.date)} <span className="hidden font-normal text-text-muted md:inline">{weekday(se.date)}</span>
                         </span>
-                        <Pencil size={12} className="shrink-0 text-text-muted opacity-60 group-hover:opacity-100" aria-hidden />
+                        <Pencil size={11} className="shrink-0 text-text-muted opacity-60 group-hover:opacity-100" aria-hidden />
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-text-muted md:text-xs">
                         {se.status !== "held" ? tr.sheet.notHeld[se.status] : se.types.join(", ") || tr.common.none}
@@ -226,90 +269,32 @@ export function TeamSheet({
               </tr>
             </thead>
             <tbody>
-              {visible.map((s) => {
-                const abs = absences(s.id);
-                const removed = s.status === "removed";
-                return (
-                  <tr key={s.id} className={removed ? "text-removed" : undefined}>
-                    <td className="sticky left-0 z-10 border-r border-b border-border bg-bg px-3 py-1">
-                      <Link href={`/ogrenciler/${s.id}${teamQuery}`} className="block min-w-0 hover:text-brand-strong">
-                        <span className={cn("flex items-center gap-2 font-medium", removed && "line-through")}>
-                          <span className="truncate">{s.full_name}</span>
-                          {s.status === "at_risk" && <span className="hidden shrink-0 rounded bg-excused-bg px-1.5 py-0.5 text-[11px] font-semibold text-excused md:inline">{tr.sheet.atRisk}</span>}
-                        </span>
-                        <span className={cn("block text-[11px] md:hidden", abs >= 3 || s.status === "at_risk" ? "font-semibold text-absent" : "text-text-muted")}>
-                          {s.status === "at_risk" ? `${tr.sheet.atRisk} · ` : ""}
-                          {tr.sheet.absencesUnder(abs)}
-                        </span>
-                      </Link>
-                    </td>
-                    <Td className="hidden md:table-cell">{s.phone ? <Phone value={s.phone} /> : <Muted />}</Td>
-                    <Td className="hidden md:table-cell">{s.parent_phone ? <Phone value={s.parent_phone} /> : <Muted />}</Td>
-                    <Td className="hidden max-w-44 truncate lg:table-cell" title={s.school ?? undefined}>{s.school ?? <Muted />}</Td>
-                    <Td className="hidden lg:table-cell">{s.class_label ?? <Muted />}</Td>
-                    <Td className={cn("hidden border-r text-center font-semibold md:table-cell", abs >= 3 && "text-absent")}>{abs}</Td>
-                    {sessions.map((se) => {
-                      const key = `${s.id}:${se.id}`;
-                      const mark = markOf(s.id, se.id);
-                      const state = cells[key];
-                      const last = se.id === lastHeld?.id;
-                      if (se.status !== "held") return <td key={se.id} className="border-b border-border bg-surface" />;
-                      if (isFuture(se)) return <td key={se.id} className="border-b border-border bg-accent-tint/50" aria-label={tr.sheet.plannedCell} />;
-                      return (
-                        <td key={se.id} className={cn("border-b border-border px-1 py-1", last && "bg-brand-tint")}>
-                          <div className="group/cell relative">
-                            <button
-                              type="button"
-                              onClick={() => cycle(s.id, se.id)}
-                              aria-label={`${s.full_name}, ${formatDateShort(se.date)}: ${mark ? tr.attendance[mark.status] : tr.sheet.cellEmpty}`}
-                              title={mark?.note ?? undefined}
-                              className={cn(
-                                "flex h-10 w-full items-center justify-center rounded-md text-xs font-semibold transition-colors md:text-[13px]",
-                                mark ? look[mark.status] : "border border-dashed border-border text-text-muted hover:bg-surface",
-                                state === "saving" && "opacity-60",
-                                state === "error" && "ring-2 ring-absent",
-                              )}
-                            >
-                              {mark ? tr.attendance[mark.status] : "—"}
-                            </button>
-                            {mark?.status === "excused" && (
-                              <button
-                                type="button"
-                                onClick={() => setNoteFor({ studentId: s.id, sessionId: se.id })}
-                                aria-label={`${tr.sheet.excuseTitle}: ${s.full_name}`}
-                                title={mark.note ?? tr.sheet.excuseTitle}
-                                className={cn(
-                                  // Excel'deki yorum işareti gibi köşede üçgen. Not yoksa fareyle üstüne gelince görünür.
-                                  "absolute top-0 right-0 flex size-6 items-start justify-end",
-                                  !mark.note && "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/cell:opacity-100 focus-visible:opacity-100",
-                                )}
-                              >
-                                <span className={cn("block size-2.5 rounded-tr-md [clip-path:polygon(0_0,100%_0,100%_100%)]", mark.note ? "bg-excused" : "bg-text-muted/50")} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-border" />
-                  </tr>
-                );
-              })}
+              {current.map(row)}
+              {gone.length > 0 && (
+                <tr>
+                  <td className="sticky left-0 z-10 border-r border-b border-border bg-surface px-2 py-1 text-[11px] font-semibold text-text-muted md:px-3">
+                    {tr.sheet.goneTitle} ({gone.length})
+                  </td>
+                  <td colSpan={sessions.length + 7} className="border-b border-border bg-surface" />
+                </tr>
+              )}
+              {gone.map(row)}
             </tbody>
-            {sessions.length > 0 && visible.length > 0 && (
+            {sessions.length > 0 && current.length > 0 && (
               <tfoot>
                 <tr>
-                  <td className="sticky bottom-0 left-0 z-30 border-r border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted">{tr.sheet.total}</td>
+                  <td className="sticky bottom-0 left-0 z-30 border-r border-border bg-surface px-2 py-1.5 text-xs font-semibold text-text-muted md:px-3">{tr.sheet.total}</td>
+                  <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface lg:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface lg:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden border-r border-border bg-surface md:table-cell" />
                   {sessions.map((se) => {
-                    const present = roster.filter((s) => markOf(s.id, se.id)?.status === "present").length;
+                    const present = current.filter((s) => markOf(s.id, se.id)?.status === "present").length;
                     return (
-                      <td key={se.id} className="sticky bottom-0 z-20 bg-surface px-2 py-2 text-center text-xs font-semibold text-text">
-                        {se.status === "held" && !isFuture(se) ? `${present}/${roster.length}` : tr.common.none}
+                      <td key={se.id} className="sticky bottom-0 z-20 bg-surface px-1 py-1.5 text-center text-xs font-semibold text-text">
+                        {se.status === "held" && !isFuture(se) ? `${present}/${current.length}` : tr.common.none}
                       </td>
                     );
                   })}
@@ -323,6 +308,17 @@ export function TeamSheet({
         </div>
       </div>
 
+      {statusFor && (
+        <StatusEditor
+          student={statusFor}
+          onClose={() => setStatusFor(null)}
+          onSaved={(status) => {
+            setStatusOf((m) => ({ ...m, [statusFor.id]: status }));
+            setStatusFor(null);
+            router.refresh();
+          }}
+        />
+      )}
       {editor && (
         <SessionEditor
           teamId={teamId}
@@ -580,6 +576,59 @@ function AddStudent({ teamId, fullHref, onClose, onAdded }: { teamId: string; fu
         <div className="flex items-center justify-between gap-2">
           <Link href={fullHref} className="text-sm text-brand-strong hover:underline">{tr.sheet.addStudentFull}</Link>
           <Button type="submit" disabled={pending}>{tr.session.add}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function StatusEditor({ student, onClose, onSaved }: { student: SheetStudent; onClose: () => void; onSaved: (status: StudentStatus) => void }) {
+  const [status, setStatus] = useState<StudentStatus>(student.status);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const options: StudentStatus[] = ["active", "at_risk", "left", "removed"];
+  return (
+    <Modal title={student.full_name} onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setPending(true);
+          const res = await setStudentStatus(student.id, status, reason);
+          setPending(false);
+          if (!res.ok) return setError(res.error);
+          onSaved(status);
+        }}
+      >
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-text">{tr.sheet.statusCol}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {options.map((o) => (
+              <button
+                key={o}
+                type="button"
+                aria-pressed={status === o}
+                onClick={() => setStatus(o)}
+                className={cn("min-h-11 rounded-lg border text-sm", status === o ? "border-brand-strong bg-brand-tint font-semibold text-brand-strong" : "border-border text-text")}
+              >
+                {tr.studentStatus[o]}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        {(status === "left" || status === "removed") && (
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-text">
+              {tr.students.statusReason} {status === "left" && <span className="font-normal text-text-muted">({tr.sheet.optional})</span>}
+            </span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} required={status === "removed"} maxLength={500} className={inputClass} />
+            <span className="mt-1 block text-xs text-text-muted">{tr.sheet.goneHint}</span>
+          </label>
+        )}
+        {error && <p className="text-sm text-absent" role="alert">{error}</p>}
+        <div className="flex justify-end">
+          <Button type="submit" disabled={pending}>{tr.common.save}</Button>
         </div>
       </form>
     </Modal>

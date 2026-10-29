@@ -24,14 +24,14 @@ export function StatTile({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col justify-between rounded-lg border border-border bg-bg", compact ? "gap-1 p-3" : "gap-2 p-4")}>
+    <div className={cn("flex min-w-0 flex-col justify-between rounded-lg border border-border bg-bg", compact ? "gap-1 p-3" : "gap-1.5 p-3 md:gap-2 md:p-4")}>
       <p className="truncate text-xs font-medium text-text-muted">{label}</p>
       <div className="flex items-end justify-between gap-2">
-        <p className={cn("font-semibold tabular-nums leading-none", compact ? "text-2xl" : "text-3xl", tone === "warn" ? "text-at-risk" : "text-text")}>{value}</p>
+        <p className={cn("font-semibold tabular-nums leading-none", compact ? "text-2xl" : "text-2xl md:text-3xl", tone === "warn" ? "text-at-risk" : "text-text")}>{value}</p>
         {trend && <Sparkline values={trend} label={`${label} eğilimi`} />}
       </div>
       {(delta !== undefined && delta !== null) || sub ? (
-        <p className="truncate text-xs text-text-muted">
+        <p className="line-clamp-2 text-xs text-text-muted">
           {delta !== undefined && delta !== null && (
             <span className={cn("mr-1 font-semibold", delta > 0 ? "text-present" : delta < 0 ? "text-absent" : "text-text-muted")}>
               {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {delta > 0 ? "+" : delta < 0 ? "−" : ""}

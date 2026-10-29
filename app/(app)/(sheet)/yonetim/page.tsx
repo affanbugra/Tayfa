@@ -17,7 +17,7 @@ export default async function OverviewPage() {
   const { teams, trend, types, atRisk, activeStudents, absentees } = await asUser(viewer.userId, async (tx) => {
     const [teams, trend, types, absentees] = await Promise.all([getTeamsOverview(tx, ws), getProgramTrend(tx), getTypeRates(tx), countFrequentAbsentees(tx)]);
     const [c] = await tx<{ at_risk: number; active: number }[]>`
-      select count(*) filter (where status = 'at_risk')::int as at_risk, count(*) filter (where status <> 'removed')::int as active
+      select count(*) filter (where status = 'at_risk')::int as at_risk, count(*) filter (where status in ('active', 'at_risk'))::int as active
       from public.students s join public.teams t on t.id = s.team_id where t.is_active`;
     return { teams, trend, types, atRisk: c.at_risk, activeStudents: c.active, absentees };
   });
@@ -50,7 +50,7 @@ export default async function OverviewPage() {
     : [{ name: tr.sheet.allTeams, color: "var(--chart-1)", values: trend.map((w) => weekRate(w)) }];
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 md:px-6">
+    <div className="mx-auto w-full max-w-7xl space-y-3 px-3 py-3 md:space-y-4 md:px-6 md:py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-display text-xl font-semibold text-text">{tr.sheet.tabSummary}</h1>
         <p className="text-sm text-text-muted">{formatDateTr(ws)} haftası</p>
@@ -59,7 +59,7 @@ export default async function OverviewPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label={tr.admin.kpiActive} value={activeStudents} sub={`${teams.length} ekip`} />
         <StatTile
-          label={nowRate === null ? `${tr.admin.kpiWeekRate} (geçen hafta)` : tr.admin.kpiWeekRate}
+          label={nowRate === null ? tr.sheet.lastWeekRate : tr.admin.kpiWeekRate}
           value={shownRate === null ? tr.common.none : `%${Math.round(shownRate * 100)}`}
           delta={delta}
           deltaLabel={tr.admin.vsLastWeek}
@@ -76,11 +76,11 @@ export default async function OverviewPage() {
           sub={lastWeek ? `Geçen hafta ${lastWeek.teams}/${teams.length}` : undefined}
           trend={recent.map((w) => w.teams)}
         />
-        <StatTile label={tr.sheet.watch} value={atRisk + absentees} sub={`${atRisk} sınırda · ${absentees} kişi 3+ kez gelmedi`} tone={atRisk + absentees > 0 ? "warn" : undefined} />
+        <StatTile label={tr.sheet.watch} value={atRisk + absentees} sub={`Sınırda ${atRisk} · 3+ devamsız ${absentees}`} tone={atRisk + absentees > 0 ? "warn" : undefined} />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-5">
-        <section className="rounded-lg border border-border bg-bg p-4 lg:col-span-3">
+        <section className="rounded-lg border border-border bg-bg p-3 md:p-4 lg:col-span-3">
           <h2 className="text-sm font-semibold text-text">{tr.sheet.weeklyTrend}</h2>
           <p className="mb-3 text-xs text-text-muted">{tr.sheet.weeklyTrendSub}</p>
           {missingGender > 0 && (
@@ -110,7 +110,7 @@ export default async function OverviewPage() {
             />
           </div>
         </section>
-        <section className="rounded-lg border border-border bg-bg p-4 lg:col-span-2">
+        <section className="rounded-lg border border-border bg-bg p-3 md:p-4 lg:col-span-2">
           <h2 className="text-sm font-semibold text-text">{tr.sheet.typeCompare}</h2>
           <p className="mb-3 text-xs text-text-muted">{tr.sheet.typeCompareSub}</p>
           <RateBars
