@@ -1,32 +1,44 @@
+import { RateBars, RateLineChart, SplitBar } from "@/components/charts";
+import { StatTile } from "@/components/stat-tile";
 import { TeamsGrid } from "@/components/teams-grid";
 import { requireAdmin } from "@/lib/auth";
-import { addDaysIso, formatDateTr, todayIstanbul, weekStartOf } from "@/lib/dates";
+import { addDaysIso, formatDateShort, formatDateTr, todayIstanbul, weekStartOf } from "@/lib/dates";
 import { asUser } from "@/lib/db";
-import { getTeamsOverview, getWeekTotals } from "@/lib/data/admin";
+import { getTeamsOverview } from "@/lib/data/admin";
+import { countFrequentAbsentees, getProgramTrend, getTypeRates } from "@/lib/data/stats";
 import { tr } from "@/lib/i18n/tr";
+
+const rate = (p: number, t: number) => (t ? p / t : null);
 
 export default async function OverviewPage() {
   const viewer = await requireAdmin();
   const today = todayIstanbul();
   const ws = weekStartOf(today);
-  const { teams, thisWeek, lastWeek, atRisk, activeStudents } = await asUser(viewer.userId, async (tx) => {
-    const [teams, thisWeek, lastWeek] = await Promise.all([
-      getTeamsOverview(tx, ws),
-      getWeekTotals(tx, ws, addDaysIso(ws, 6)),
-      getWeekTotals(tx, addDaysIso(ws, -7), addDaysIso(ws, -1)),
-    ]);
+  const { teams, trend, types, atRisk, activeStudents, absentees } = await asUser(viewer.userId, async (tx) => {
+    const [teams, trend, types, absentees] = await Promise.all([getTeamsOverview(tx, ws), getProgramTrend(tx), getTypeRates(tx), countFrequentAbsentees(tx)]);
     const [c] = await tx<{ at_risk: number; active: number }[]>`
       select count(*) filter (where status = 'at_risk')::int as at_risk, count(*) filter (where status <> 'removed')::int as active
       from public.students s join public.teams t on t.id = s.team_id where t.is_active`;
-    return { teams, thisWeek, lastWeek, atRisk: c.at_risk, activeStudents: c.active };
+    return { teams, trend, types, atRisk: c.at_risk, activeStudents: c.active, absentees };
   });
 
-  const rate = thisWeek.total ? thisWeek.present / thisWeek.total : null;
-  const prevRate = lastWeek.total ? lastWeek.present / lastWeek.total : null;
-  const delta = rate !== null && prevRate !== null ? Math.round((rate - prevRate) * 100) : null;
-  // Gün biliniyorsa o gün geçmiş olmalı; bilinmiyorsa hafta sonu bittiyse (pazar ya da sonrası) "girilmedi" sayılır.
+  const byWeek = new Map(trend.map((w) => [w.week_start, w]));
+  const thisWeek = byWeek.get(ws);
+  const lastWeek = byWeek.get(addDaysIso(ws, -7));
+  const weekRate = (w?: (typeof trend)[number]) => (w ? rate(w.present, w.present + w.absent + w.excused) : null);
+  const nowRate = weekRate(thisWeek);
+  const prevRate = weekRate(lastWeek);
+  // Bu hafta henüz yoklama yoksa kart geçen haftayı gösterir.
+  const shownRate = nowRate ?? prevRate;
+  const delta = nowRate !== null && prevRate !== null ? Math.round((nowRate - prevRate) * 100) : null;
+  const recent = trend.slice(-12);
+
   const sunday = addDaysIso(ws, 1);
   const overdue = (day: string | null) => (day === "saturday" ? today > ws : today > sunday);
+  const totals = teams.reduce((a, t) => ({ p: a.p + t.recent_present, t: a.t + t.recent_total }), { p: 0, t: 0 });
+  const average = rate(totals.p, totals.t);
+  const typeTotals = types.reduce((a, t) => ({ p: a.p + t.present, t: a.t + t.total }), { p: 0, t: 0 });
+  const split = thisWeek ?? lastWeek;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 md:px-6">
@@ -36,17 +48,75 @@ export default async function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label={tr.admin.kpiActive} value={String(activeStudents)} />
-        <Kpi
-          label={tr.admin.kpiWeekRate}
-          value={rate === null ? tr.common.none : `%${Math.round(rate * 100)}`}
-          sub={delta === null ? undefined : `${delta >= 0 ? "+" : "−"}${Math.abs(delta)} puan ${tr.admin.vsLastWeek}`}
+        <StatTile label={tr.admin.kpiActive} value={activeStudents} sub={`${teams.length} ekip`} />
+        <StatTile
+          label={nowRate === null ? `${tr.admin.kpiWeekRate} (geçen hafta)` : tr.admin.kpiWeekRate}
+          value={shownRate === null ? tr.common.none : `%${Math.round(shownRate * 100)}`}
+          delta={delta}
+          deltaLabel={tr.admin.vsLastWeek}
+          trend={recent.map((w) => weekRate(w))}
         />
-        <Kpi label={tr.admin.kpiTeamsEntered} value={`${thisWeek.teams}/${teams.length}`} />
-        <Kpi label={tr.admin.kpiAtRisk} value={String(atRisk)} />
+        <StatTile
+          label={tr.admin.kpiTeamsEntered}
+          value={
+            <>
+              {thisWeek?.teams ?? 0}
+              <span className="text-lg font-medium text-text-muted">/{teams.length}</span>
+            </>
+          }
+          sub={lastWeek ? `Geçen hafta ${lastWeek.teams}/${teams.length}` : undefined}
+          trend={recent.map((w) => w.teams)}
+        />
+        <StatTile label={tr.sheet.watch} value={atRisk + absentees} sub={`${atRisk} sınırda · ${absentees} kişi 3+ kez gelmedi`} tone={atRisk + absentees > 0 ? "warn" : undefined} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-5">
+        <section className="rounded-lg border border-border bg-bg p-4 lg:col-span-3">
+          <h2 className="text-sm font-semibold text-text">{tr.sheet.weeklyTrend}</h2>
+          <p className="mb-3 text-xs text-text-muted">{tr.sheet.weeklyTrendSub}</p>
+          {trend.length ? (
+            <RateLineChart
+              caption={tr.sheet.weeklyTrend}
+              labels={trend.map((w) => formatDateShort(w.week_start))}
+              series={[
+                { name: tr.sheet.grade10, color: "var(--chart-1)", values: trend.map((w) => rate(w.g10.present, w.g10.total)) },
+                { name: tr.sheet.grade11, color: "var(--chart-2)", values: trend.map((w) => rate(w.g11.present, w.g11.total)) },
+              ]}
+            />
+          ) : (
+            <p className="text-sm text-text-muted">{tr.common.none}</p>
+          )}
+          <div className="mt-4 border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-semibold text-text">
+              {tr.sheet.thisWeekSplit}
+              {!thisWeek && lastWeek && <span className="font-normal text-text-muted"> (geçen hafta)</span>}
+            </h3>
+            <SplitBar
+              caption={tr.sheet.thisWeekSplit}
+              parts={[
+                { label: tr.attendance.present, value: split?.present ?? 0, color: "var(--present)" },
+                { label: tr.attendance.excused, value: split?.excused ?? 0, color: "var(--excused)" },
+                { label: tr.attendance.absent, value: split?.absent ?? 0, color: "var(--absent)" },
+              ]}
+            />
+          </div>
+        </section>
+        <section className="rounded-lg border border-border bg-bg p-4 lg:col-span-2">
+          <h2 className="text-sm font-semibold text-text">{tr.sheet.typeCompare}</h2>
+          <p className="mb-3 text-xs text-text-muted">{tr.sheet.typeCompareSub}</p>
+          <RateBars
+            caption={tr.sheet.typeCompare}
+            rows={types
+              .map((t) => ({ label: t.name, value: rate(t.present, t.total), detail: `${t.sessions} buluşma · ${t.present}/${t.total}` }))
+              .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))}
+            average={rate(typeTotals.p, typeTotals.t)}
+            averageLabel={tr.sheet.programAvg}
+          />
+        </section>
       </div>
 
       <TeamsGrid
+        average={average}
         rows={teams.map((t) => ({
           id: t.id,
           name: t.name,
@@ -56,21 +126,13 @@ export default async function OverviewPage() {
           gender: t.gender ?? "",
           active: t.active_students,
           rate: t.recent_total ? t.recent_present / t.recent_total : null,
+          weekly: t.weekly,
           atRisk: t.at_risk,
+          lastSession: t.last_session ? formatDateShort(t.last_session) : tr.common.none,
           week: t.this_week ? "entered" : overdue(t.meeting_day) ? "notEntered" : "waiting",
         }))}
       />
       <p className="text-xs text-text-muted">{tr.sheet.summaryHint}</p>
-    </div>
-  );
-}
-
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-bg p-4">
-      <p className="text-xs text-text-muted">{label}</p>
-      <p className="font-display text-2xl font-semibold tabular-nums text-text">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-text-muted">{sub}</p>}
     </div>
   );
 }

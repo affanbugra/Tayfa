@@ -220,7 +220,10 @@ Liderin tek ekranı; Excel'deki sayfasının karşılığı. Bileşen: `componen
 ### 6.3 Yönetim — Özet (`/yonetim`) ve ekip sekmeleri (`/yonetim/ekipler/[id]`)
 - Üst bantta Özet · Kullanıcılar · Ayarlar; altta Excel'deki gibi yatay kayan sekmeler: Özet + her aktif ekip (`components/sheet-tabs.tsx`).
 - Özet: KPI şeridi (aktif öğrenci, bu hafta katılım ± geçen hafta, yoklaması girilen ekip, sınırdaki öğrenci) ve ekipler tablosu (`components/teams-grid.tsx`): ekip · **lider e-postası** (yazıp çıkınca kaydedilir, altında "Lider girişi yaptı / Davet edildi") · gün · cinsiyet (açılır listeler, değişince kaydedilir) · öğrenci · son 4 hafta · sınırda · bu hafta (Girildi / Girilmedi / Bekleniyor).
+- **İstatistik öncelikli** (kullanıcı kararı, 29 Ekim 2026): Özet bir panodur. Üstte kartlar (aktif öğrenci, bu hafta katılım + 12 haftalık eğilim, yoklaması girilen ekip, takip edilecek), haftalık katılım çizgisi (10. ve 11. sınıf), bu hafta sonu Geldi/Mazeret/Gelmedi dağılımı, etkinlik türüne göre katılım. Ekip listesinin sütunları istatistiktir (öğrenci, son 4 hafta çubuğu + program ortalaması çizgisi, eğilim, sınırda, son yoklama, bu hafta); tek seferlik ayarlar (lider e-postası, gün, cinsiyet) sütun değildir, ekip adının yanındaki küçük etiketten açılan pencerede düzenlenir.
 - Ekip sekmesi: liderin gördüğü tablonun aynısı, yönetici de düzenler.
+- Liderin tablosunun üstünde gizlenebilir istatistik şeridi (`components/team-stats.tsx`): son buluşma, son 4 hafta (önceki 4 haftaya göre), program ortalaması (ekip kaç puan önde/geride; `program_week_rates()` security definer fonksiyonundan, sadece toplamlar), takip edilecek; geniş ekranda buluşma başına katılım sütunları. Telefonda kartlar yana kayan tek satır.
+- Grafikler bağımlılıksız SVG (`components/charts.tsx`), renkler `--chart-*` token'ları (dataviz doğrulayıcısından geçti).
 - Lider e-postası `setTeamLeaderEmail` ile davet listesine yazılır; ekibin tek lider daveti kalır, kişi daha önce girdiyse hemen bağlanır.
 
 ### 6.7 Yönetim — Raporlar (`/yonetim/raporlar`)

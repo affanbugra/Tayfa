@@ -25,6 +25,12 @@
   --at-risk: #b54708;
   --removed: #6b7280;
 
+  /* Grafik: renk körlüğü doğrulamasından geçti (dataviz validate_palette, açık ve koyu) */
+  --chart-1: #008ba3;
+  --chart-2: #8158c9;
+  --chart-grid: #e1e7ea;
+  --chart-muted: #9aa4ab;
+
   --radius: 8px;
 }
 
@@ -39,6 +45,10 @@
   --present-bg: #12291e;
   --absent-bg: #33171a;
   --excused-bg: #33230f;
+  --chart-1: #25a3ba;
+  --chart-2: #9a78e3;
+  --chart-grid: #26333a;
+  --chart-muted: #6b7a82;
 }
 
 @theme inline {
