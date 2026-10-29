@@ -139,23 +139,25 @@ export function TeamSheet({
         type="button"
         onClick={() => setStatusFor({ ...s, status })}
         aria-label={`${s.full_name}: ${tr.sheet.changeStatus} (${tr.studentStatus[status]})`}
-        className={cn("inline-flex h-6 shrink-0 items-center rounded px-1.5 text-[11px] font-semibold whitespace-nowrap", statusLook[status])}
+        className={cn("inline-flex h-5 shrink-0 items-center rounded px-1 text-[10px] font-medium whitespace-nowrap md:h-6 md:px-1.5 md:text-[11px]", statusLook[status])}
       >
         {tr.studentStatusShort[status]}
       </button>
     );
     return (
       <tr key={s.id} className={out ? "text-removed" : undefined}>
-        <td className={cn("sticky left-0 z-10 border-r border-b border-border px-2 py-0.5 md:px-3", out ? "bg-surface" : "bg-bg")}>
-          <Link href={`/ogrenciler/${s.id}${teamQuery}`} className="block truncate text-[13px] leading-5 font-medium hover:text-brand-strong md:text-sm">
+        <td className={cn("sticky left-0 z-10 w-32 max-w-32 min-w-32 border-b border-border px-2 py-1 md:w-52 md:max-w-52 md:min-w-52 md:px-3", out ? "bg-surface" : "bg-bg")}>
+          <Link href={`/ogrenciler/${s.id}${teamQuery}`} title={s.full_name} className="block truncate text-[13px] font-medium hover:text-brand-strong md:text-sm">
             {s.full_name}
           </Link>
-          <span className="flex items-center gap-1.5 md:hidden">
+        </td>
+        <td className={cn("sticky left-32 z-10 border-r border-b border-border px-1 py-1 text-center md:left-52 md:px-2", out ? "bg-surface" : "bg-bg")}>
+          <span className="inline-flex items-center gap-1">
             {pill}
-            {!out && <span className={cn("truncate text-[11px]", abs >= 3 ? "font-semibold text-absent" : "text-text-muted")}>{tr.sheet.absencesUnder(abs)}</span>}
+            {/* Telefonda "Gelmediği" sütunu yok: 3 ve üzeri devamsızlık durum etiketinin yanında küçük kırmızı sayı */}
+            {!out && abs >= 3 && <span className="text-[10px] font-semibold text-absent md:hidden" title={tr.sheet.absencesUnder(abs)}>{abs}✕</span>}
           </span>
         </td>
-        <Td className="hidden md:table-cell">{pill}</Td>
         <Td className="hidden md:table-cell">{s.phone ? <Phone value={s.phone} /> : <Muted />}</Td>
         <Td className="hidden md:table-cell">{s.parent_phone ? <Phone value={s.parent_phone} /> : <Muted />}</Td>
         <Td className="hidden max-w-44 truncate lg:table-cell" title={s.school ?? undefined}>{s.school ?? <Muted />}</Td>
@@ -212,7 +214,7 @@ export function TeamSheet({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Tek satır: düğmeler solda, istatistik etiketleri yanında (telefonda yana kayar) */}
+      {/* Düğmeler tek satır; altında kaydırmadan görünen küçük istatistik satırı */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-2 md:px-6">
         <Button type="button" onClick={() => setEditor("new")} className="min-h-10 shrink-0 px-3">
           <Plus size={18} aria-hidden />
@@ -225,8 +227,8 @@ export function TeamSheet({
         <a href={exportHref} aria-label={tr.team.downloadExcel} title={tr.team.downloadExcel} className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-text hover:bg-surface">
           <Download size={18} aria-hidden />
         </a>
-        {stats && <div className="-mr-4 min-w-0 flex-1 overflow-x-auto pr-4 md:mr-0 md:pr-0">{stats}</div>}
       </div>
+      {stats && <div className="border-b border-border px-4 py-1.5 md:px-6">{stats}</div>}
       {errors > 0 && (
         <p className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-absent-bg px-3 py-2 text-sm text-absent md:mx-6" role="alert">
           <AlertCircle size={16} aria-hidden />
@@ -240,8 +242,8 @@ export function TeamSheet({
           <table className="border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
-                <Th className="sticky left-0 z-30 w-36 min-w-36 border-r md:w-52 md:min-w-52">{tr.sheet.name}</Th>
-                <Th className="hidden md:table-cell">{tr.sheet.statusCol}</Th>
+                <Th className="sticky left-0 z-30 w-32 max-w-32 min-w-32 md:w-52 md:max-w-52 md:min-w-52">{tr.sheet.name}</Th>
+                <Th className="sticky left-32 z-30 border-r px-1 text-center md:left-52 md:px-2">{tr.sheet.statusCol}</Th>
                 <Th className="hidden min-w-40 md:table-cell">{tr.sheet.phone}</Th>
                 <Th className="hidden min-w-32 md:table-cell">{tr.sheet.parent}</Th>
                 <Th className="hidden min-w-44 lg:table-cell">{tr.sheet.school}</Th>
@@ -249,7 +251,7 @@ export function TeamSheet({
                 <Th className="hidden min-w-20 border-r text-center md:table-cell">{tr.sheet.absences}</Th>
                 {sessions.map((se) => (
                   <th key={se.id} className={cn("sticky top-0 z-20 border-b border-border p-0 text-left align-bottom font-normal", se.id === lastHeld?.id ? "bg-brand-tint shadow-[inset_0_3px_0_var(--accent)]" : "bg-surface")}>
-                    <button type="button" onClick={() => setEditor(se)} className="group block w-[78px] px-1.5 py-1.5 text-left md:w-[104px] md:px-2 md:py-2" aria-label={`${tr.sheet.editSession}: ${formatDateShort(se.date)}`}>
+                    <button type="button" onClick={() => setEditor(se)} className="group block w-[72px] px-1.5 py-1.5 text-left md:w-[104px] md:px-2 md:py-2" aria-label={`${tr.sheet.editSession}: ${formatDateShort(se.date)}`}>
                       <span className="flex items-center justify-between gap-1 text-xs font-semibold text-text md:text-[13px]">
                         <span>
                           {formatDateShort(se.date)} <span className="hidden font-normal text-text-muted md:inline">{weekday(se.date)}</span>
@@ -272,10 +274,11 @@ export function TeamSheet({
               {current.map(row)}
               {gone.length > 0 && (
                 <tr>
-                  <td className="sticky left-0 z-10 border-r border-b border-border bg-surface px-2 py-1 text-[11px] font-semibold text-text-muted md:px-3">
+                  <td className="sticky left-0 z-10 border-b border-border bg-surface px-2 py-1 text-[11px] font-semibold whitespace-nowrap text-text-muted md:px-3">
                     {tr.sheet.goneTitle} ({gone.length})
                   </td>
-                  <td colSpan={sessions.length + 7} className="border-b border-border bg-surface" />
+                  <td className="sticky left-32 z-10 border-r border-b border-border bg-surface md:left-52" />
+                  <td colSpan={sessions.length + 6} className="border-b border-border bg-surface" />
                 </tr>
               )}
               {gone.map(row)}
@@ -283,8 +286,8 @@ export function TeamSheet({
             {sessions.length > 0 && current.length > 0 && (
               <tfoot>
                 <tr>
-                  <td className="sticky bottom-0 left-0 z-30 border-r border-border bg-surface px-2 py-1.5 text-xs font-semibold text-text-muted md:px-3">{tr.sheet.total}</td>
-                  <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
+                  <td className="sticky bottom-0 left-0 z-30 bg-surface px-2 py-1.5 text-xs font-semibold text-text-muted md:px-3">{tr.sheet.total}</td>
+                  <td className="sticky bottom-0 left-32 z-30 border-r border-border bg-surface md:left-52" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface md:table-cell" />
                   <td className="sticky bottom-0 z-20 hidden bg-surface lg:table-cell" />
