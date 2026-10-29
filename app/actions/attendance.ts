@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireViewer } from "@/lib/auth";
-import { todayIstanbul } from "@/lib/dates";
+import { addDaysIso, todayIstanbul } from "@/lib/dates";
 import { asUser } from "@/lib/db";
 import { toTitleCaseTr } from "@/lib/import/normalize";
 
@@ -34,7 +34,8 @@ export async function saveSession(input: {
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Bilgiler geçersiz" };
   const v = parsed.data;
-  if (v.date > todayIstanbul()) return { ok: false, error: "İleri tarih seçilemez" };
+  // İleri tarih planlama için açık (en fazla 90 gün); yoklama günü gelince işaretlenir.
+  if (v.date > addDaysIso(todayIstanbul(), 90)) return { ok: false, error: "En fazla 3 ay sonrası seçilebilir" };
   try {
     const viewer = await requireViewer();
     const id = await asUser(viewer.userId, async (tx) => {

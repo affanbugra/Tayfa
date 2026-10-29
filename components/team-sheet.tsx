@@ -12,7 +12,7 @@ import { inputClass } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import type { SheetMark, SheetSession, SheetStudent } from "@/lib/data/sheet";
 import type { AttendanceStatus } from "@/lib/data/queries";
-import { formatDateShort } from "@/lib/dates";
+import { addDaysIso, formatDateShort } from "@/lib/dates";
 import { tr } from "@/lib/i18n/tr";
 
 type Status = AttendanceStatus;
@@ -112,10 +112,12 @@ export function TeamSheet({
     return students.filter((s) => (showRemoved || s.status !== "removed") && (!q || s.full_name.toLocaleLowerCase("tr").includes(q)));
   }, [students, query, showRemoved]);
 
+  // Planlanmış (ileri tarihli) buluşmalar görünür ama günü gelene kadar işaretlenmez ve sayılmaz.
+  const isFuture = (se: SheetSession) => se.date > today;
   const absences = (studentId: string) =>
-    sessions.reduce((n, se) => n + (se.status === "held" && markOf(studentId, se.id)?.status === "absent" ? 1 : 0), 0);
+    sessions.reduce((n, se) => n + (se.status === "held" && !isFuture(se) && markOf(studentId, se.id)?.status === "absent" ? 1 : 0), 0);
 
-  const lastHeld = [...sessions].reverse().find((s) => s.status === "held");
+  const lastHeld = [...sessions].reverse().find((s) => s.status === "held" && !isFuture(s));
   const roster = students.filter((s) => s.status !== "removed");
   const unmarkedInLast = lastHeld ? roster.filter((s) => !markOf(s.id, lastHeld.id)) : [];
 
@@ -214,6 +216,9 @@ export function TeamSheet({
                       <span className="mt-0.5 block truncate text-[11px] text-text-muted md:text-xs">
                         {se.status !== "held" ? tr.sheet.notHeld[se.status] : se.types.join(", ") || tr.common.none}
                       </span>
+                      {isFuture(se) && se.status === "held" && (
+                        <span className="mt-1 inline-block rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-text">{tr.sheet.planned}</span>
+                      )}
                     </button>
                   </th>
                 ))}
@@ -249,6 +254,7 @@ export function TeamSheet({
                       const state = cells[key];
                       const last = se.id === lastHeld?.id;
                       if (se.status !== "held") return <td key={se.id} className="border-b border-border bg-surface" />;
+                      if (isFuture(se)) return <td key={se.id} className="border-b border-border bg-accent-tint/50" aria-label={tr.sheet.plannedCell} />;
                       return (
                         <td key={se.id} className={cn("border-b border-border px-1 py-1", last && "bg-brand-tint")}>
                           <div className="group/cell relative">
@@ -303,7 +309,7 @@ export function TeamSheet({
                     const present = roster.filter((s) => markOf(s.id, se.id)?.status === "present").length;
                     return (
                       <td key={se.id} className="sticky bottom-0 z-20 bg-surface px-2 py-2 text-center text-xs font-semibold text-text">
-                        {se.status === "held" ? `${present}/${roster.length}` : tr.common.none}
+                        {se.status === "held" && !isFuture(se) ? `${present}/${roster.length}` : tr.common.none}
                       </td>
                     );
                   })}
@@ -471,7 +477,7 @@ function SessionEditor({
       <div className="space-y-4">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-text">{tr.session.date}</span>
-          <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+          <input type="date" value={date} max={addDaysIso(today, 90)} onChange={(e) => setDate(e.target.value)} className={inputClass} />
         </label>
         <fieldset>
           <legend className="mb-1 text-sm font-medium text-text">

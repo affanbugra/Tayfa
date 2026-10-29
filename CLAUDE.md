@@ -249,7 +249,10 @@ SQL bilmeyen biri için "filtrele, sütun seç, indir" akışı:
 
 Filtreler sunucuda parametreli sorguya çevrilir. **Kullanıcıdan gelen metin asla SQL'e birleştirilmez.**
 
-### 6.9 Yönetim — Eşleştirme (`/yonetim/eslestirme`)
+### 6.9 Yönetim — Eşleştirme (`/yonetim/etkinlikler`)
+
+**Yapılan (29 Ekim 2026):** Üst bantta "Etkinlikler". Üstte matris (a), altta haftalık planlayıcı (c) aynı sayfada; öneri algoritması (d) `lib/matching/suggest.ts` + `tests/unit/suggest.test.ts`. **Kullanıcı kararları:** plan kaydedilince her ekibin tablosunda o tarihte etkinliği hazır bir buluşma sütunu açılır (`app/actions/plan.ts › savePlan`), lider sadece yoklamayı işaretler; sütun kaydedildiği anda "Planlandı" etiketiyle görünür, günü gelince işaretlenir. **Liderler esnektir:** plandan gelen sütunun etkinliğini ve tarihini değiştirebilir. Bu yüzden buluşmalar 90 güne kadar ileri tarihli olabilir; ileri tarihli sütun işaretlenmez, devamsızlık ve istatistiklere girmez. Plandan çıkarılan ekibin, plandan açılmış ve henüz işaretlenmemiş sütunu silinir; yoklaması alınmış buluşmaya dokunulmaz. Henüz yok: matris Excel indirme, program takvimi (b), plan/gerçekleşen karşılaştırması (e).
+
 Amaç: yönetimin haftalık "hangi ekip ne yapacak" kararını **kolaylaştırmak** ve ekipler arasında **adaleti** sağlamak. **Sistem sadece önerir, nihai eşleştirmeyi yönetim elle yapar.**
 
 **Geçen yılın (2025–2026) analizinden çıkan iş kuralları** (34 sayfa, yaklaşık 900 buluşma incelendi; bu veri sisteme **aktarılmaz**):
@@ -511,10 +514,10 @@ Yerel oturumda sıradaki adımlar:
 - [ ] Denetim kaydı ekranı
 
 ### Faz 3 — Eşleştirme
-- [ ] Etkinlik dağılım matrisi (ortalamaya göre renk, denge skoru, Excel indir)
-- [ ] Haftalık planlayıcı, kapasite, ortak program etkinliği
-- [ ] Öneri algoritması + gerekçeler + birim testleri
-- [ ] Planın lider ekranına ve yoklama formuna yansıması, plan ve gerçekleşen karşılaştırması
+- [x] Etkinlik dağılım matrisi (ortalamaya göre renk, "hiç" sütunu, ortalama ve "hiç yapmayan" satırları) — Excel indir eksik
+- [x] Haftalık planlayıcı, kapasite (haftaya özel), "herkese aynı etkinlik"
+- [x] Öneri algoritması + gerekçeler + birim testleri
+- [x] Planın lider tablosuna yansıması (hazır sütun) — plan ve gerçekleşen karşılaştırması eksik
 - [ ] Program takvimi (ortak / rotasyon / ara haftalar, "döngüyü uygula")
 
 ### Faz 4 — Cila

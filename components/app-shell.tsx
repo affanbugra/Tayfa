@@ -8,6 +8,7 @@ import { tr } from "@/lib/i18n/tr";
 
 const adminNav: NavItem[] = [
   { href: "/yonetim", label: tr.sheet.tabSummary },
+  { href: "/yonetim/etkinlikler", label: tr.plan.navTitle },
   { href: "/yonetim/kullanicilar", label: tr.nav.users },
   { href: "/yonetim/ayarlar", label: tr.nav.settings },
 ];

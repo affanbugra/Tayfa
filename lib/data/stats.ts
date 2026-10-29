@@ -21,7 +21,7 @@ export async function getProgramTrend(tx: Tx): Promise<WeekPoint[]> {
       count(*) filter (where a.status = 'present')::int as present,
       count(*) filter (where a.status = 'absent')::int as absent,
       count(*) filter (where a.status = 'excused')::int as excused,
-      count(distinct se.team_id)::int as teams
+      count(distinct se.team_id) filter (where a.session_id is not null)::int as teams
     from public.sessions se
     join public.teams t on t.id = se.team_id and t.is_active
     left join public.attendance a on a.session_id = se.id

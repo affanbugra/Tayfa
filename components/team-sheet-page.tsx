@@ -67,7 +67,7 @@ export async function TeamSheetPage({ viewer, teamId }: { viewer: Viewer; teamId
 
 /** Tablodaki işaretlerden ekip istatistikleri; program ortalaması sadece toplam sayılardan. */
 function teamStats(sheet: Sheet, program: { week_start: string; present: number; total: number }[], today: string): TeamStatsData {
-  const held = sheet.sessions.filter((se) => se.status === "held");
+  const held = sheet.sessions.filter((se) => se.status === "held" && se.date <= today);
   const perSession = held.map((se) => {
     let present = 0;
     let total = 0;

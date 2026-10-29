@@ -38,10 +38,11 @@ export async function getTeamsOverview(tx: Tx, weekStart: string): Promise<TeamO
       t.grade, t.gender, t.meeting_day,
       (select count(*)::int from public.students s where s.team_id = t.id and s.status <> 'removed') as active_students,
       (select count(*)::int from public.students s where s.team_id = t.id and s.status = 'at_risk') as at_risk,
-      (select max(date) from public.sessions se where se.team_id = t.id) as last_session,
+      (select max(date) from public.sessions se where se.team_id = t.id and exists (select 1 from public.attendance a where a.session_id = se.id)) as last_session,
       coalesce((select sum(h.pc)::int from held h where h.team_id = t.id and h.w between 0 and 3), 0) as recent_present,
       coalesce((select sum(h.tc)::int from held h where h.team_id = t.id and h.w between 0 and 3), 0) as recent_total,
-      exists (select 1 from public.sessions se where se.team_id = t.id and se.date between ${weekStart}::date and ${weekStart}::date + 6) as this_week,
+      exists (select 1 from public.sessions se where se.team_id = t.id and se.date between ${weekStart}::date and ${weekStart}::date + 6
+              and (se.status <> 'held' or exists (select 1 from public.attendance a where a.session_id = se.id))) as this_week,
       (select json_agg(json_build_object('w', wk.w, 'p', coalesce(h.p, 0), 't', coalesce(h.n, 0)) order by wk.w desc)
          from weeks wk left join (select hh.w, sum(hh.pc)::int p, sum(hh.tc)::int n from held hh where hh.team_id = t.id group by hh.w) h on h.w = wk.w) as weekly
     from public.teams t left join public.profiles pr on pr.id = t.leader_id
