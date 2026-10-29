@@ -3,6 +3,11 @@ export const tr = {
   appName: "Tayfa Yoklama",
   appDescription: "Tayfa Liderlik Programı yoklama ve takip sistemi",
   kvkkLink: "Kişisel Verilerin Korunması",
+  kvkk: {
+    placeholder: "Tayfa Yoklama, Esenler Belediyesi Gençlik ve Spor Müdürlüğü'nün Tayfa Liderlik Programı için kullanılan yoklama ve takip sistemidir. Kişisel verilerin işlenmesine ilişkin aydınlatma metni belediye tarafından hazırlanarak bu sayfada yayımlanacaktır.",
+    contact: "Sorularınız için program yönetimiyle iletişime geçebilirsiniz.",
+    back: "Giriş sayfasına dön",
+  },
 
   auth: {
     intro: "Liderler ve yönetim, davet edilen Google hesabıyla giriş yapar.",

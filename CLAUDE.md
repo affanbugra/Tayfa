@@ -495,6 +495,7 @@ Yerel oturumda sıradaki adımlar:
 - Vercel: proje `tayfa-yoklama` (Hobby), üretim dalı `master`, üç ortam değişkeni girildi.
 - Supabase › Auth › URL Configuration: site `https://tayfa-yoklama.vercel.app`, yönlendirmeler canlı + önizleme (`tayfa-yoklama-*-affanbugras-projects.vercel.app`) + `localhost:3000`. Canlı Google girişi kullanıcıyla denendi.
 - Dikkat: Vercel'de ortam değişkenleri "Production and Preview" olarak girildi, yani önizlemeler de **canlı veritabanına** bağlı (§10 ile çelişir). Ayrı bir sahte veri projesi açılana kadar önizlemelerde gerçek veriyle dikkatli olunur.
+- Google OAuth uygulaması **In production** (29 Ekim 2026): marka sayfasında ana sayfa `https://tayfa-yoklama.vercel.app`, gizlilik politikası `/kvkk` (herkese açık, `app/(auth)/kvkk`), izinli alan adları supabase.co ve tayfa-yoklama.vercel.app. Logo yüklenmedi (yüklenirse Google doğrulaması gerekir). Excel tekrar yüklenmeyecek (kullanıcı kararı); lider e-postalarını kullanıcı Özet'ten girecek.
 - Kalan: `xlsx` paketinin CDN sürümüne geçişi (§13 #9), yanlışlıkla okunan `service_role` anahtarının Supabase'te yenilenmesi.
 
 ### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
