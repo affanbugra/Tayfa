@@ -507,6 +507,13 @@ Yerel oturumda sıradaki adımlar:
 5. Vercel: repoyu içe aktar, ortam değişkenleri (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `DATABASE_URL` transaction pooler 6543), deploy; Supabase › Auth › URL Configuration'a Vercel adresi.
 6. Kurulum bitince kullanıcıya oluşturduğu Supabase erişim anahtarlarını silmesini hatırlat.
 
+**Faz 0 ilerleme (29 Ekim 2026, yerel oturum):**
+- Supabase CLI kullanılmadı: şema `pnpm migrate` ile doğrudan `DATABASE_URL` üzerinden kuruldu (proje ref `pmfaszdtamfidfkvpfxy`, session pooler `aws-1-eu-central-1`). DB şifresi sıfırlandı, yalnızca `.env.local`'da.
+- Excel yüklendi: 26 ekip, 567 öğrenci, 32 buluşma, 496 yoklama; ilk admin daveti var. Kaynak dosya 23 Ekim tarihli, canlıya geçişte son haliyle tekrar çalıştırılacak.
+- Google OAuth: Google Cloud projesi "Tayfa Yoklama" (`pristine-valve-513016-u5`), istemci "Tayfa Yoklama Web", Supabase'te Google sağlayıcısı açık.
+- Vercel: proje `tayfa-yoklama` (Hobby), üretim dalı `master`, üç ortam değişkeni girildi.
+- Kalan: Supabase › Auth › URL Configuration'a Vercel adresi, canlı giriş denemesi, `xlsx` paketinin CDN sürümüne geçişi (§13 #9).
+
 ### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
 - [x] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
 - [x] Şema + RLS + trigger'lar + seed (sadece sahte veri) + ilk admin daveti
