@@ -12,7 +12,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
   const viewer = await requireViewer();
   const { student, schools } = await asUser(viewer.userId, async (tx) => ({ student: await getStudent(tx, id), schools: await getSchools(tx) }));
   if (!student) notFound();
-  if (viewer.role === "leader" && viewer.teamId !== student.team_id) redirect("/ogrenciler");
+  if (viewer.role === "leader" && viewer.teamId !== student.team_id) redirect("/ekibim");
   const q = viewer.role === "admin" ? `?ekip=${student.team_id}` : "";
   return (
     <div>

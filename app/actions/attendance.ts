@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireViewer } from "@/lib/auth";
 import { todayIstanbul } from "@/lib/dates";
@@ -11,32 +10,69 @@ import { toTitleCaseTr } from "@/lib/import/normalize";
 const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-function teamParam(role: string, teamId: string) {
-  return role === "admin" ? `?ekip=${teamId}` : "";
-}
-
-export async function createSession(formData: FormData) {
-  const viewer = await requireViewer();
-  const input = z
-    .object({ teamId: uuid, date: isoDate, typeIds: z.array(uuid) })
-    .parse({ teamId: formData.get("teamId"), date: formData.get("date"), typeIds: formData.getAll("typeIds") });
-  if (input.date > todayIstanbul()) throw new Error("İleri tarih seçilemez");
-
-  const id = await asUser(viewer.userId, async (tx) => {
-    const [existing] = await tx<{ id: string }[]>`select id from public.sessions where team_id = ${input.teamId} and date = ${input.date}`;
-    if (existing) return existing.id;
-    const [row] = await tx<{ id: string }[]>`
-      insert into public.sessions (team_id, date, created_by) values (${input.teamId}, ${input.date}, ${viewer.userId}) returning id`;
-    for (const t of input.typeIds) {
-      await tx`insert into public.session_activity_types (session_id, activity_type_id) values (${row.id}, ${t})`;
-    }
-    return row.id;
-  });
-  revalidatePath("/", "layout");
-  redirect(`/yoklama/${id}${teamParam(viewer.role, input.teamId)}`);
-}
-
 export type MarkResult = { ok: true } | { ok: false; error: string };
+export type SessionResult = { ok: true; id: string } | { ok: false; error: string };
+
+/** Tabloya yeni buluşma sütunu açar ya da var olanı günceller. Sayfa değişmez. */
+export async function saveSession(input: {
+  sessionId?: string;
+  teamId: string;
+  date: string;
+  status: "held" | "postponed" | "cancelled";
+  typeIds: string[];
+  note?: string;
+}): Promise<SessionResult> {
+  const parsed = z
+    .object({
+      sessionId: uuid.optional(),
+      teamId: uuid,
+      date: isoDate,
+      status: z.enum(["held", "postponed", "cancelled"]),
+      typeIds: z.array(uuid).max(10),
+      note: z.string().max(1000).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Bilgiler geçersiz" };
+  const v = parsed.data;
+  if (v.date > todayIstanbul()) return { ok: false, error: "İleri tarih seçilemez" };
+  try {
+    const viewer = await requireViewer();
+    const id = await asUser(viewer.userId, async (tx) => {
+      const note = v.note?.trim() || null;
+      let id = v.sessionId;
+      if (id) {
+        await tx`update public.sessions set date = ${v.date}, status = ${v.status}, note = ${note} where id = ${id}`;
+        await tx`delete from public.session_activity_types where session_id = ${id}`;
+      } else {
+        const [row] = await tx<{ id: string }[]>`
+          insert into public.sessions (team_id, date, status, note, created_by)
+          values (${v.teamId}, ${v.date}, ${v.status}, ${note}, ${viewer.userId}) returning id`;
+        id = row.id;
+      }
+      for (const t of v.typeIds) {
+        await tx`insert into public.session_activity_types (session_id, activity_type_id) values (${id}, ${t})`;
+      }
+      return id;
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, id };
+  } catch (e) {
+    if (e instanceof Error && /sessions_team_id_date_key/.test(e.message)) return { ok: false, error: "Bu tarihte ekibin zaten bir buluşması var" };
+    return { ok: false, error: "Kaydedilemedi" };
+  }
+}
+
+export async function removeSession(sessionId: string): Promise<MarkResult> {
+  try {
+    const viewer = await requireViewer();
+    const id = uuid.parse(sessionId);
+    await asUser(viewer.userId, (tx) => tx`delete from public.sessions where id = ${id}`);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Silinemedi" };
+  }
+}
 
 export async function setAttendance(input: {
   sessionId: string;
@@ -91,53 +127,6 @@ export async function markAllPresent(sessionId: string, studentIds: string[]): P
 }
 
 export type FormState = { error?: string; ok?: boolean } | null;
-
-export async function updateSession(_prev: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await requireViewer();
-  const parsed = z
-    .object({
-      sessionId: uuid,
-      date: isoDate,
-      status: z.enum(["held", "postponed", "cancelled"]),
-      note: z.string().max(1000),
-      typeIds: z.array(uuid),
-    })
-    .safeParse({
-      sessionId: formData.get("sessionId"),
-      date: formData.get("date"),
-      status: formData.get("status"),
-      note: formData.get("note") ?? "",
-      typeIds: formData.getAll("typeIds"),
-    });
-  if (!parsed.success) return { error: "Bilgiler geçersiz" };
-  const v = parsed.data;
-  if (v.date > todayIstanbul()) return { error: "İleri tarih seçilemez" };
-  try {
-    await asUser(viewer.userId, async (tx) => {
-      await tx`update public.sessions set date = ${v.date}, status = ${v.status}, note = ${v.note.trim() || null} where id = ${v.sessionId}`;
-      await tx`delete from public.session_activity_types where session_id = ${v.sessionId}`;
-      for (const t of v.typeIds) {
-        await tx`insert into public.session_activity_types (session_id, activity_type_id) values (${v.sessionId}, ${t})`;
-      }
-    });
-  } catch (e) {
-    if (e instanceof Error && /sessions_team_id_date_key/.test(e.message)) return { error: "Bu tarihte ekibin başka bir buluşması var" };
-    return { error: "Kaydedilemedi" };
-  }
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-export async function deleteSession(formData: FormData) {
-  const viewer = await requireViewer();
-  const sessionId = uuid.parse(formData.get("sessionId"));
-  const teamId = await asUser(viewer.userId, async (tx) => {
-    const [row] = await tx<{ team_id: string }[]>`delete from public.sessions where id = ${sessionId} returning team_id`;
-    return row?.team_id;
-  });
-  revalidatePath("/", "layout");
-  redirect(`/yoklamalar${teamId ? teamParam(viewer.role, teamId) : ""}`);
-}
 
 export async function quickAddStudent(teamId: string, fullName: string): Promise<{ ok: true; id: string; fullName: string } | { ok: false; error: string }> {
   try {

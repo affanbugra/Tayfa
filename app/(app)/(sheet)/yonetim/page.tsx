@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { TeamsTable } from "@/components/teams-table";
-import { Card, PageTitle } from "@/components/ui/card";
+import { TeamsGrid } from "@/components/teams-grid";
 import { requireAdmin } from "@/lib/auth";
-import { addDaysIso, formatDateShort, formatDateTr, todayIstanbul, weekStartOf } from "@/lib/dates";
+import { addDaysIso, formatDateTr, todayIstanbul, weekStartOf } from "@/lib/dates";
 import { asUser } from "@/lib/db";
 import { getTeamsOverview, getWeekTotals } from "@/lib/data/admin";
 import { tr } from "@/lib/i18n/tr";
@@ -26,13 +24,16 @@ export default async function OverviewPage() {
   const rate = thisWeek.total ? thisWeek.present / thisWeek.total : null;
   const prevRate = lastWeek.total ? lastWeek.present / lastWeek.total : null;
   const delta = rate !== null && prevRate !== null ? Math.round((rate - prevRate) * 100) : null;
-  // Gün biliniyorsa o gün geçmiş olmalı; bilinmiyorsa hafta sonu bittiyse (pazar ya da sonrası) listelenir.
+  // Gün biliniyorsa o gün geçmiş olmalı; bilinmiyorsa hafta sonu bittiyse (pazar ya da sonrası) "girilmedi" sayılır.
   const sunday = addDaysIso(ws, 1);
-  const missing = teams.filter((t) => !t.this_week && (t.meeting_day === "saturday" ? today > ws : today > sunday));
+  const overdue = (day: string | null) => (day === "saturday" ? today > ws : today > sunday);
 
   return (
-    <div className="space-y-6">
-      <PageTitle sub={`${formatDateTr(ws)} haftası`}>{tr.admin.overviewTitle}</PageTitle>
+    <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 md:px-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="font-display text-xl font-semibold text-text">{tr.sheet.tabSummary}</h1>
+        <p className="text-sm text-text-muted">{formatDateTr(ws)} haftası</p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label={tr.admin.kpiActive} value={String(activeStudents)} />
@@ -45,39 +46,21 @@ export default async function OverviewPage() {
         <Kpi label={tr.admin.kpiAtRisk} value={String(atRisk)} />
       </div>
 
-      <Card title={`${tr.admin.missingTitle} (${missing.length})`}>
-        {missing.length === 0 ? (
-          <p className="text-sm text-text-muted">{tr.admin.missingEmpty}</p>
-        ) : (
-          <ul className="grid gap-x-6 sm:grid-cols-2">
-            {missing.map((t) => (
-              <li key={t.id} className="flex min-h-10 items-center justify-between gap-3 border-b border-border text-sm last:border-0">
-                <Link href={`/yonetim/ekipler/${t.id}`} className="text-text hover:text-brand-strong hover:underline">{t.name}</Link>
-                <span className="text-text-muted">{t.meeting_day ? tr.days[t.meeting_day] : tr.unknown}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-text">{tr.admin.teamsTitle}</h2>
-        <TeamsTable
-          rows={teams.map((t) => ({
-            id: t.id,
-            name: t.name,
-            leader: t.leader_name ?? "",
-            grade: t.grade,
-            day: t.meeting_day,
-            active: t.active_students,
-            rate: t.recent_total ? t.recent_present / t.recent_total : null,
-            weekly: t.weekly,
-            atRisk: t.at_risk,
-            lastSession: t.last_session,
-            lastSessionLabel: t.last_session ? formatDateShort(t.last_session) : tr.common.none,
-          }))}
-        />
-      </section>
+      <TeamsGrid
+        rows={teams.map((t) => ({
+          id: t.id,
+          name: t.name,
+          email: t.leader_email ?? t.invited_email ?? "",
+          signedIn: Boolean(t.leader_email),
+          day: t.meeting_day ?? "",
+          gender: t.gender ?? "",
+          active: t.active_students,
+          rate: t.recent_total ? t.recent_present / t.recent_total : null,
+          atRisk: t.at_risk,
+          week: t.this_week ? "entered" : overdue(t.meeting_day) ? "notEntered" : "waiting",
+        }))}
+      />
+      <p className="text-xs text-text-muted">{tr.sheet.summaryHint}</p>
     </div>
   );
 }

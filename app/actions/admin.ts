@@ -36,6 +36,62 @@ export async function inviteUser(_prev: FormState, formData: FormData): Promise<
   return { ok: true };
 }
 
+export type InlineResult = { ok: true } | { ok: false; error: string };
+
+/** Özet tablosundan: ekibin liderini e-postayla belirler. Boş e-posta lideri kaldırır. */
+export async function setTeamLeaderEmail(teamId: string, email: string): Promise<InlineResult> {
+  const parsed = z
+    .object({ teamId: uuid, email: z.union([z.literal(""), z.string().trim().toLowerCase().email()]) })
+    .safeParse({ teamId, email: email.trim().toLowerCase() });
+  if (!parsed.success) return { ok: false, error: "Geçerli bir e-posta girin" };
+  const v = parsed.data;
+  try {
+    const viewer = await requireAdmin();
+    await asUser(viewer.userId, async (tx) => {
+      // Ekibin tek lideri olur: bu ekibe bağlı başka lider daveti kalmaz.
+      await tx`delete from public.invitations where team_id = ${v.teamId} and role = 'leader' and email <> ${v.email}`;
+      await tx`update public.teams set leader_id = null where id = ${v.teamId}`;
+      if (!v.email) return;
+      const [existing] = await tx<{ role: string }[]>`select role from public.invitations where email = ${v.email}`;
+      if (existing?.role === "admin") throw new Error("admin");
+      await tx`
+        insert into public.invitations (email, role, team_id, invited_by) values (${v.email}, 'leader', ${v.teamId}, ${viewer.userId})
+        on conflict (email) do update set role = 'leader', team_id = excluded.team_id`;
+      // Kişi daha önce giriş yaptıysa hemen bağlanır.
+      const [p] = await tx<{ id: string }[]>`update public.profiles set role = 'leader' where email = ${v.email} returning id`;
+      if (p) {
+        await tx`update public.teams set leader_id = null where leader_id = ${p.id}`;
+        await tx`update public.teams set leader_id = ${p.id} where id = ${v.teamId}`;
+      }
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "admin") return { ok: false, error: "Bu e-posta yönetici olarak kayıtlı" };
+    return { ok: false, error: "Kaydedilemedi" };
+  }
+  revalidatePath("/yonetim", "layout");
+  return { ok: true };
+}
+
+/** Özet tablosundan: buluşma günü ya da cinsiyet. */
+export async function setTeamField(teamId: string, field: "meeting_day" | "gender", value: string): Promise<InlineResult> {
+  const schema = field === "meeting_day" ? z.enum(["saturday", "sunday", ""]) : z.enum(["K", "E", ""]);
+  const parsed = z.object({ teamId: uuid, value: schema }).safeParse({ teamId, value });
+  if (!parsed.success) return { ok: false, error: "Bilgiler geçersiz" };
+  try {
+    const viewer = await requireAdmin();
+    const val = parsed.data.value || null;
+    await asUser(viewer.userId, (tx) =>
+      field === "meeting_day"
+        ? tx`update public.teams set meeting_day = ${val} where id = ${parsed.data.teamId}`
+        : tx`update public.teams set gender = ${val} where id = ${parsed.data.teamId}`,
+    );
+  } catch {
+    return { ok: false, error: "Kaydedilemedi" };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function deleteInvitation(formData: FormData) {
   const viewer = await requireAdmin();
   const id = uuid.parse(formData.get("id"));

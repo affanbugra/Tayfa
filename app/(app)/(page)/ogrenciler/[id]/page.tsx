@@ -6,7 +6,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { CopyButton } from "@/components/copy-button";
 import { StudentStatusBadge } from "@/components/status-badge";
 import { StudentStatusForm } from "@/components/student-status-form";
-import { percent } from "@/components/team-header";
+import { BackToSheet, percent } from "@/components/team-header";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, PageTitle, inputClass } from "@/components/ui/card";
 import { requireViewer } from "@/lib/auth";
@@ -31,7 +31,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   });
   if (!data) notFound();
   const { student: s, history, teams } = data;
-  if (viewer.role === "leader" && viewer.teamId !== s.team_id) redirect("/ogrenciler");
+  if (viewer.role === "leader" && viewer.teamId !== s.team_id) redirect("/ekibim");
   const q = viewer.role === "admin" ? `?ekip=${s.team_id}` : "";
 
   const held = history.filter((h) => h.session_status === "held" && h.status);
@@ -45,6 +45,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-4">
+      <BackToSheet teamId={s.team_id} admin={viewer.role === "admin"} />
       <PageTitle
         sub={<span className="flex items-center gap-2">{s.team_name} <StudentStatusBadge status={s.status} /></span>}
         action={<Link href={`/ogrenciler/${s.id}/duzenle${q}`} className={buttonClass("secondary")}>{tr.team.edit}</Link>}
@@ -81,7 +82,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
           <ul className="divide-y divide-border">
             {history.map((h) => (
               <li key={h.session_id}>
-                <Link href={`/yoklama/${h.session_id}${q}`} className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                <div className="flex min-h-11 items-center justify-between gap-3 text-sm">
                   <span>
                     <span className="text-text">{formatDateTr(h.date)}</span>
                     <span className="ml-2 text-text-muted">{h.types.join(", ")}</span>
@@ -90,7 +91,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                   <span className={cn("shrink-0 font-medium", h.status ? markStyle[h.status] : "text-text-muted")}>
                     {h.session_status !== "held" ? tr.sessionStatus[h.session_status] : h.status ? tr.attendance[h.status] : tr.attendance.unmarked}
                   </span>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>

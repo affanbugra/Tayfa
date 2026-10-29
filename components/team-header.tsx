@@ -2,12 +2,12 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { tr } from "@/lib/i18n/tr";
 
-/** Yönetici bir ekibin lider ekranlarındayken ekip detayına dönüş. */
-export function TeamBackLink({ teamId }: { teamId: string }) {
+/** Öğrenci sayfalarından ekip tablosuna dönüş. */
+export function BackToSheet({ teamId, admin }: { teamId: string; admin: boolean }) {
   return (
-    <Link href={`/yonetim/ekipler/${teamId}`} className="mb-2 inline-flex min-h-9 items-center gap-1 text-sm text-brand-strong hover:underline">
+    <Link href={admin ? `/yonetim/ekipler/${teamId}` : "/ekibim"} className="mb-2 inline-flex min-h-9 items-center gap-1 text-sm text-brand-strong hover:underline">
       <ChevronLeft size={16} aria-hidden />
-      {tr.admin.teamDetail}
+      {tr.sheet.backToSheet}
     </Link>
   );
 }

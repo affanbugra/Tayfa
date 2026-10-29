@@ -63,6 +63,7 @@ görünümlü bir web uygulaması.
 | Geçen yıl verisi | **Kullanılmaz.** Eşleştirme sıfırdan, sadece 2026–2027 verisiyle başlar. Geçen yılın dosyası sadece iş kurallarını anlamak için analiz edildi (§6.9). |
 | Ön teyit | **Yok.** "Gelecek / Haber Verecek / Ulaşamadım" gibi etkinlik öncesi durumlar eklenmez. Yoklama sadece Geldi / Gelmedi / Mazeret. |
 | Bildirimler | Şimdilik **yok** (e-posta da push da yok). Panelde görsel uyarılar var (ör. "bu hafta yoklama girilmedi"). |
+| Arayüz düzeni | **Excel benzeri tek tablo** (kullanıcı kararı, 29 Ekim 2026). Liderin tek ekranı kendi ekibinin tablosudur: satırlar öğrenciler, sütunlar buluşmalar, hücreye dokununca Geldi → Gelmedi → Mazeret → boş döner ve anında kaydolur. Yönetimde altta Excel'deki gibi sekmeler (Özet + her ekip). Ayrı yoklama sayfası, öğrenci listesi sayfası, yan menü ve alt menü **yoktur**. Kurulum işleri (lider e-postası, gün, cinsiyet) Özet tablosunda satırın içinde yapılır. Onaylanan taslak: https://claude.ai/artifact/8fHjrULP7ftmiQnPtrMCWt |
 | Cihaz | **Telefon öncelikli.** Yoklama ekranı tek elle kullanılabilir. Yönetim raporları masaüstünde de rahat okunur. PWA olarak ana ekrana eklenebilir. |
 | Tasarım | **Tayfa kurumsal kimliği**: turkuaz `#4BBACD` + çapa sarısı `#FBC52F`, logo `public/brand/tayfa-logo-square.png`. Kontrast kuralları ve token'lar §8'de. |
 | Takvim | **1–2 hafta içinde MVP** canlıya çıkar (yoklama + öğrenci + içe aktarma + temel yönetim görünümü). Raporlar, sorgu ve eşleştirme sonraki fazlarda gelir. |
@@ -207,46 +208,20 @@ Tüm arayüz **Türkçe**. Tarih biçimi: `11 Ekim 2026 Paz`. Sıralamalar `loca
 - Tek ekran: logo, "Google ile giriş yap" butonu, kısa açıklama. Başka bir şey yok.
 - Giriş sonrası role göre yönlendirme: `leader` → `/ekibim`, diğer roller → `/yonetim`.
 
-### 6.2 Lider — Ekibim (`/ekibim`)
-Telefonda açılan ilk ekran. Yukarıdan aşağıya:
-1. Ekip adı, okul(lar), buluşma günü.
-2. **Büyük birincil buton: "Yoklama Al".** Bu hafta için yönetimin planı varsa altında "Bu hafta: Bowling" yazar.
-3. Son buluşmanın özeti (tarih, etkinlik, 14/20 geldi) ve "Düzenle" bağlantısı.
-4. Bilgi kartı: `Devamsızlık Sınırında` işaretli öğrenciler ve en çok mazeretsiz devamsızlığı olan öğrenciler (isim + sayı). Durum otomatik değişmez.
-5. Mini istatistik: aktif öğrenci sayısı, son 4 haftanın katılım oranı.
+### 6.2 Lider — Ekip tablosu (`/ekibim`)
+Liderin tek ekranı; Excel'deki sayfasının karşılığı. Bileşen: `components/team-sheet.tsx`, veri: `lib/data/sheet.ts`.
+- Üstte ekip adı, gün, öğrenci sayısı ve varsa yönetimin bu haftaki planı ("Bu hafta: Bowling").
+- Araç çubuğu: **Yeni buluşma** (pencere: tarih, etkinlik türü çipleri, durum Yapıldı/Ertelendi/İptal, not; tarih varsayılanı ekibin son buluşma günü, plan varsa türler seçili gelir), **Son buluşma: hepsi geldi** (sadece işaretsizleri doldurur), arama, "Çıkarılanları göster", öğrenci ekle (hızlı: sadece ad; "Tüm bilgileriyle ekle" forma gider), Excel indir.
+- Tablo: ad sütunu ve başlık satırı sabit, en yeni buluşma sağda ve açılışta oraya kaydırılır, son buluşma turkuaz zeminli ve üstünde sarı çizgi. Masaüstünde telefon (kopyala + `tel:`), veli, okul, sınıf, "Gelmediği" sütunları; telefonda bunlar gizlenir, adın altında "3 kez gelmedi" yazar. Altta her buluşmanın "geldi/toplam" satırı.
+- Hücre: dokununca Geldi → Gelmedi → Mazeret → boş; iyimser güncelleme, kaydedilemezse kırmızı çerçeve ve üstte uyarı, tekrar dokununca aynı değer yeniden denenir. Mazeret hücresinin köşesindeki üçgen (Excel yorum işareti gibi) not penceresini açar; not varsa üçgen turuncu.
+- Sütun başlığına dokunmak buluşmayı düzenler/siler (silme iki dokunuşla onaylanır, tarayıcı diyaloğu yok). Ertelenen/iptal sütunlar gri ve yoklamasızdır.
+- Ada dokunmak öğrenci detay sayfasını açar (`/ogrenciler/[id]`: tüm alanlar, kopyala, durum değiştirme, geçmiş; "Tabloya dön").
 
-Alt gezinme çubuğu (mobil): **Ekibim · Yoklamalar · Öğrenciler**.
-
-### 6.3 Lider — Yoklama Al (`/yoklama/yeni`, `/yoklama/[id]`)
-Bu ekran ürünün kalbidir. Bir yoklama telefonda **30 saniyenin altında** alınabilmelidir.
-- Üstte tarih (varsayılan bugün; ileri tarih seçilemez), altında etkinlik türü çipleri (çoklu seçim, plan varsa önceden seçili).
-- Öğrenci listesi: aktif ve sınırdaki öğrenciler, alfabetik (tr). Her satırda isim ve sağda **üç büyük segment butonu: Geldi · Gelmedi · Mazeret** (dokunma alanı ≥ 44px). Renkler §8'deki durum token'larından gelir.
-- "Mazeret" seçilince satırın altında tek satırlık not alanı açılır ("Düğünü var" gibi).
-- Liste üstünde "Tümünü Geldi işaretle" butonu var. Sonra sadece istisnalar değiştirilir.
-- Yapışkan alt çubuk: `Geldi 14 · Gelmedi 4 · Mazeret 2 · İşaretsiz 0` ve "Kaydet" butonu.
-- **Her dokunuş anında kaydedilir** (iyimser güncelleme + arka planda server action). İnternet yoksa veya kayıt başarısızsa o satırda "Kaydedilmedi · Tekrar dene" görünür; çevrimdışı kuyruk yoktur. Kaydedilmemiş satır varken sayfadan çıkılırsa uyarı verilir.
-- "Buluşma ertelendi / iptal" seçeneği: `sessions.status` değişir, yoklama alınmaz. Excel'deki "Ertelendi" etkinlik türü yerine bu kullanılır.
-- Geçmiş yoklamalar düzenlenebilir (lider kendi ekibinde, admin hepsinde).
-- Ekip listesine eklenecek yeni bir öğrenci yoklama sırasında geldiyse: "Listede olmayan öğrenci ekle" → hızlı form (sadece ad soyad zorunlu), sonra yoklamaya eklenir.
-
-### 6.4 Lider — Öğrenciler (`/ogrenciler`, `/ogrenciler/[id]`)
-- Arama kutusu ve durum filtresi (Devam Ediyor / Sınırda / Çıkarıldı / Tümü).
-- Satır: ad soyad, okul, sınıf, katılım yüzdesi, durum rozeti.
-- **Tablo görünümü** düğmesi: Excel'e alışkın kullanıcılar için öğrenci × buluşma matrisi (salt okunur, renkli hücreler, yatay kaydırma, ilk sütun sabit). Liderler eski düzeni burada tanır.
-- Öğrenci detay sayfası: tüm alanlar. TC, telefon ve veli telefonu yanında **kopyala** butonu, telefonda `tel:` bağlantısı. Altında yoklama geçmişi ve katılım oranı.
-- Düzenleme formu: tüm alanlar. TC 11 hane ve checksum doğrulaması yapılır; geçersizse uyarı gösterilir ama kayda izin verilir. Telefon normalize edilir.
-- **Durum değiştirme**: menüden seçilir. `Çıkarıldı` için gerekçe zorunlu.
-- **Mazeretsiz devamsızlık sayısı** listede ve detayda gösterilir. Durum otomatik değişmez (bkz. §2).
-
-### 6.5 Yönetim — Genel Bakış (`/yonetim`)
-Masaüstünde sol kenar çubuğu, mobilde alt menü. İçerik:
-- **KPI şeridi**: aktif öğrenci · bu hafta katılım oranı (geçen haftaya göre ±) · bu hafta yoklaması girilen ekip sayısı (örn. 22/26) · devamsızlık sınırındaki öğrenci.
-- **"Bu hafta yoklama girilmedi"** listesi: buluşma günü geçmiş ama `session` kaydı olmayan ekipler (lider adı + gün).
-- **Haftalık katılım trendi** (çizgi grafik; tüm program, 10. ve 11. sınıf ayrı seriler).
-- **Ekipler tablosu**: ekip · lider · sınıf · gün · aktif öğrenci · son 4 hafta katılım (yüzde + mini sparkline) · sınırdaki öğrenci · son yoklama tarihi. Sıralanabilir, satıra tıklanınca ekip detayına gider.
-
-### 6.6 Yönetim — Ekip Detayı (`/yonetim/ekipler/[id]`)
-Liderin gördüğü her şey (salt okunur ya da admin için düzenlenebilir) ve ek analizler: haftalık katılım grafiği, etkinlik türlerine göre katılım, en çok ve en az katılan öğrenciler, katılan ve ayrılan öğrenci zaman çizelgesi, yaptığı etkinlik türleri.
+### 6.3 Yönetim — Özet (`/yonetim`) ve ekip sekmeleri (`/yonetim/ekipler/[id]`)
+- Üst bantta Özet · Kullanıcılar · Ayarlar; altta Excel'deki gibi yatay kayan sekmeler: Özet + her aktif ekip (`components/sheet-tabs.tsx`).
+- Özet: KPI şeridi (aktif öğrenci, bu hafta katılım ± geçen hafta, yoklaması girilen ekip, sınırdaki öğrenci) ve ekipler tablosu (`components/teams-grid.tsx`): ekip · **lider e-postası** (yazıp çıkınca kaydedilir, altında "Lider girişi yaptı / Davet edildi") · gün · cinsiyet (açılır listeler, değişince kaydedilir) · öğrenci · son 4 hafta · sınırda · bu hafta (Girildi / Girilmedi / Bekleniyor).
+- Ekip sekmesi: liderin gördüğü tablonun aynısı, yönetici de düzenler.
+- Lider e-postası `setTeamLeaderEmail` ile davet listesine yazılır; ekibin tek lider daveti kalır, kişi daha önce girdiyse hemen bağlanır.
 
 ### 6.7 Yönetim — Raporlar (`/yonetim/raporlar`)
 - Üstte filtreler: **dönem** (Son hafta · Son 4 hafta · Son 3 ay · Tüm dönem · Özel aralık), sınıf (10/11), cinsiyet, gün, ekip.
@@ -512,7 +487,9 @@ Yerel oturumda sıradaki adımlar:
 - Excel yüklendi: 26 ekip, 567 öğrenci, 32 buluşma, 496 yoklama; ilk admin daveti var. Kaynak dosya 23 Ekim tarihli, canlıya geçişte son haliyle tekrar çalıştırılacak.
 - Google OAuth: Google Cloud projesi "Tayfa Yoklama" (`pristine-valve-513016-u5`), istemci "Tayfa Yoklama Web", Supabase'te Google sağlayıcısı açık.
 - Vercel: proje `tayfa-yoklama` (Hobby), üretim dalı `master`, üç ortam değişkeni girildi.
-- Kalan: Supabase › Auth › URL Configuration'a Vercel adresi, canlı giriş denemesi, `xlsx` paketinin CDN sürümüne geçişi (§13 #9).
+- Supabase › Auth › URL Configuration: site `https://tayfa-yoklama.vercel.app`, yönlendirmeler canlı + önizleme (`tayfa-yoklama-*-affanbugras-projects.vercel.app`) + `localhost:3000`. Canlı Google girişi kullanıcıyla denendi.
+- Dikkat: Vercel'de ortam değişkenleri "Production and Preview" olarak girildi, yani önizlemeler de **canlı veritabanına** bağlı (§10 ile çelişir). Ayrı bir sahte veri projesi açılana kadar önizlemelerde gerçek veriyle dikkatli olunur.
+- Kalan: `xlsx` paketinin CDN sürümüne geçişi (§13 #9), yanlışlıkla okunan `service_role` anahtarının Supabase'te yenilenmesi.
 
 ### Faz 1 — MVP (hedef: 1–2 hafta, liderler kullanmaya başlar)
 - [x] Next.js iskeleti, tasarım token'ları, layout (lider mobil alt menü, yönetim kenar çubuğu)
@@ -568,5 +545,5 @@ Yerel oturumda sıradaki adımlar:
 | 6 | Yedekleme. | ✅ Şimdilik yapılmıyor (kullanıcı kararı). Ücretsiz planda otomatik yedek yok. |
 | 7 | Şenlik'in gerçek tarihi. | ✅ Kullanıcı: 5 Ekim 2026. Tüm Şenlik sütunları bu tarihe yazılır (uygulamadan düzeltilebilir). |
 | 8 | Birleşik öğrenci listesi ~600 çıkıyor, beklenen ~430. Yeni Kayıt'ta olup ana listede olmayan ~170 kişi gerçekten ekipte mi? | ✅ Hepsi aktarılır (kullanıcı: "en ideali yap, yanlışsa uygulamadan düzeltilir"). Sonuç: 567 öğrenci. Başka ekibin ana listesinde de olan Yeni Kayıt satırları ana listedeki ekipte kalır. |
-| 10 | Ekiplerin cinsiyeti ve buluşma günü. | ✅ Bilinmiyor; boş başlar. Lider kendi ekibinde, yönetici hepsinde uygulamadan girer. Eşleştirmede yönetim tarihi elle seçer (`plan_entries.planned_date`), lider o tarihi görür. |
+| 10 | Ekiplerin cinsiyeti ve buluşma günü. | ✅ Bilinmiyor; boş başlar. Yönetici Özet tablosunda satırın içinden girer (29 Ekim 2026: liderdeki ayrı form kaldırıldı). Eşleştirmede yönetim tarihi elle seçer (`plan_entries.planned_date`), lider o tarihi görür. |
 | 9 | SheetJS sürümü. | npm'deki `xlsx@0.18.5` eski ve bilinen açıkları var (dosya ayrıştırmada). Geliştirme ortamı `cdn.sheetjs.com`'a erişemediği için geçici olarak bu sürüm kullanılıyor; Vercel'e çıkmadan önce `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` ile değiştirilir. |

@@ -7,6 +7,8 @@ export type TeamOverviewRow = {
   name: string;
   leader_name: string | null;
   leader_email: string | null;
+  /** Lider henüz giriş yapmadıysa davet e-postası */
+  invited_email: string | null;
   grade: number;
   gender: string | null;
   meeting_day: string | null;
@@ -31,7 +33,9 @@ export async function getTeamsOverview(tx: Tx, weekStart: string): Promise<TeamO
       where se.status = 'held'
       group by se.id
     )
-    select t.id, t.name, t.leader_name, pr.email as leader_email, t.grade, t.gender, t.meeting_day,
+    select t.id, t.name, t.leader_name, pr.email as leader_email,
+      (select i.email from public.invitations i where i.team_id = t.id and i.role = 'leader' order by i.created_at desc limit 1) as invited_email,
+      t.grade, t.gender, t.meeting_day,
       (select count(*)::int from public.students s where s.team_id = t.id and s.status <> 'removed') as active_students,
       (select count(*)::int from public.students s where s.team_id = t.id and s.status = 'at_risk') as at_risk,
       (select max(date) from public.sessions se where se.team_id = t.id) as last_session,

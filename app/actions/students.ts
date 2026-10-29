@@ -118,7 +118,7 @@ export async function deleteStudent(formData: FormData) {
     return row?.team_id;
   });
   revalidatePath("/", "layout");
-  redirect(teamId ? `/ogrenciler?ekip=${teamId}` : "/yonetim");
+  redirect(teamId ? `/yonetim/ekipler/${teamId}` : "/yonetim");
 }
 
 export async function moveStudent(formData: FormData) {
