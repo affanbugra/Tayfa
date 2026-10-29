@@ -25,9 +25,10 @@ export type Tx = postgres.TransactionSql;
 
 export async function asUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return (await client().begin(async (tx) => {
+    // Tek gidiş-dönüş: kimlik ve rol aynı sorguda (set_config('role', …, true) = SET LOCAL ROLE).
     await tx`select set_config('request.jwt.claim.sub', ${userId}, true),
-                    set_config('request.jwt.claims', ${JSON.stringify({ sub: userId, role: "authenticated" })}, true)`;
-    await tx.unsafe("set local role authenticated");
+                    set_config('request.jwt.claims', ${JSON.stringify({ sub: userId, role: "authenticated" })}, true),
+                    set_config('role', 'authenticated', true)`;
     return fn(tx);
   })) as T;
 }
