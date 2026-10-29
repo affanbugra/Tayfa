@@ -15,21 +15,21 @@ import { tr } from "@/lib/i18n/tr";
 import { suggest } from "@/lib/matching/suggest";
 
 type Row = { typeId: string; date: string };
-type Filter = { grade: "" | "10" | "11"; day: "" | "saturday" | "sunday" };
+type Filter = { gender: "" | "E" | "K"; day: "" | "saturday" | "sunday" };
 
 const cellTone = (count: number, mean: number) =>
   count === 0 ? "bg-accent font-semibold text-text" : count < mean - 0.5 ? "bg-accent-tint text-text" : count > mean + 0.5 ? "bg-surface text-text-muted" : "bg-bg text-text";
 
 export function ActivityPlanner({ matrix, weekStart, plan }: { matrix: Matrix; weekStart: string; plan: WeekPlan }) {
-  const [filter, setFilter] = useState<Filter>({ grade: "", day: "" });
+  const [filter, setFilter] = useState<Filter>({ gender: "", day: "" });
   const [notice, setNotice] = useState<string | null>(null);
   const rotation = matrix.types.filter((t) => t.in_rotation);
-  const teams = matrix.teams.filter((t) => (!filter.grade || String(t.grade) === filter.grade) && (!filter.day || t.meeting_day === filter.day));
+  const teams = matrix.teams.filter((t) => (!filter.gender || t.gender === filter.gender) && (!filter.day || t.meeting_day === filter.day));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtre">
-        <Seg label="Sınıf" value={filter.grade} options={[["", "Tümü"], ["10", "10"], ["11", "11"]]} onChange={(grade) => setFilter((f) => ({ ...f, grade: grade as Filter["grade"] }))} />
+        <Seg label="Ekip" value={filter.gender} options={[["", "Tümü"], ["E", tr.sheet.boys], ["K", tr.sheet.girls]]} onChange={(gender) => setFilter((f) => ({ ...f, gender: gender as Filter["gender"] }))} />
         <Seg label="Gün" value={filter.day} options={[["", "Tümü"], ["saturday", "Cmt"], ["sunday", "Paz"]]} onChange={(day) => setFilter((f) => ({ ...f, day: day as Filter["day"] }))} />
       </div>
       <MatrixTable matrix={matrix} teams={teams} rotation={rotation} />

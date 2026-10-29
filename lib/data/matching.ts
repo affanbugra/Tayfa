@@ -38,7 +38,9 @@ export async function getMatrix(tx: Tx, today: string, weekStart: string): Promi
       order by se.date`,
     tx<{ matching_weights: Weights }[]>`select matching_weights from public.settings limit 1`,
   ]);
-  teams.sort((a, b) => a.grade - b.grade || a.name.localeCompare(b.name, "tr"));
+  // Önce erkek, sonra kız ekipleri, cinsiyeti girilmemişler sonda; her grup ada göre.
+  const genderOrder = (g: string | null) => (g === "E" ? 0 : g === "K" ? 1 : 2);
+  teams.sort((a, b) => genderOrder(a.gender) - genderOrder(b.gender) || a.name.localeCompare(b.name, "tr"));
   const rotation = new Set(types.filter((t) => t.in_rotation).map((t) => t.id));
 
   // Matris sadece gerçekleşenleri gösterir; öneri ise seçilen haftadan önce planlanmış sütunları da sayar

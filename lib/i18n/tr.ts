@@ -225,8 +225,13 @@ export const tr = {
     typeCompareSub: "Hangi etkinlik daha çok katılım getiriyor",
     programAvg: "Program ortalaması",
     thisWeekSplit: "Bu hafta sonu",
-    grade10: "10. sınıf",
-    grade11: "11. sınıf",
+    boys: "Erkekler",
+    girls: "Kızlar",
+    allTeams: "Tüm ekipler",
+    genderMissing: (n: number, none: boolean) =>
+      none
+        ? "Ekiplerin cinsiyeti henüz girilmedi, grafik tüm ekipleri tek çizgide gösteriyor. Özet listesinde ekip adının yanındaki etiketten girilince erkek ve kız ekipleri ayrı görünür."
+        : `${n} ekibin cinsiyeti girilmemiş; bu ekipler erkek/kız çizgilerinde yok. Özet listesinde ekip adının yanındaki etiketten girilebilir.`,
     lastSession: "Son buluşma",
     last4Rate: "Son 4 hafta",
     watch: "Takip edilecek",

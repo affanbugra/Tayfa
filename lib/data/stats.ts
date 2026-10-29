@@ -9,15 +9,14 @@ export type WeekPoint = {
   excused: number;
   /** O hafta yoklama giren ekip sayısı */
   teams: number;
-  /** Sınıf seviyesine göre katılım (geldi / işaretli) */
-  g10: { present: number; total: number };
-  g11: { present: number; total: number };
+  /** Cinsiyete göre katılım (geldi / işaretli); cinsiyeti girilmemiş ekipler `none` */
+  byGender: Record<"E" | "K" | "none", { present: number; total: number }>;
 };
 
-/** Yönetim: program boyunca haftalık katılım, 10. ve 11. sınıf ayrı. RLS'e göre admin her şeyi görür. */
+/** Yönetim: program boyunca haftalık katılım, erkek ve kız ekipleri ayrı. RLS'e göre admin her şeyi görür. */
 export async function getProgramTrend(tx: Tx): Promise<WeekPoint[]> {
-  const rows = await tx<{ week_start: string; grade: number; present: number; absent: number; excused: number; teams: number }[]>`
-    select (se.date - ((extract(isodow from se.date)::int + 1) % 7))::date as week_start, t.grade,
+  const rows = await tx<{ week_start: string; gender: "E" | "K" | null; present: number; absent: number; excused: number; teams: number }[]>`
+    select (se.date - ((extract(isodow from se.date)::int + 1) % 7))::date as week_start, t.gender,
       count(*) filter (where a.status = 'present')::int as present,
       count(*) filter (where a.status = 'absent')::int as absent,
       count(*) filter (where a.status = 'excused')::int as excused,
@@ -25,7 +24,7 @@ export async function getProgramTrend(tx: Tx): Promise<WeekPoint[]> {
     from public.sessions se
     join public.teams t on t.id = se.team_id and t.is_active
     left join public.attendance a on a.session_id = se.id
-    where se.status = 'held'
+    where se.status = 'held' and se.date <= current_date
     group by 1, 2 order by 1`;
   const byWeek = new Map<string, WeekPoint>();
   for (const r of rows) {
@@ -35,14 +34,13 @@ export async function getProgramTrend(tx: Tx): Promise<WeekPoint[]> {
       absent: 0,
       excused: 0,
       teams: 0,
-      g10: { present: 0, total: 0 },
-      g11: { present: 0, total: 0 },
+      byGender: { E: { present: 0, total: 0 }, K: { present: 0, total: 0 }, none: { present: 0, total: 0 } },
     };
     w.present += r.present;
     w.absent += r.absent;
     w.excused += r.excused;
     w.teams += r.teams;
-    const g = r.grade === 10 ? w.g10 : w.g11;
+    const g = w.byGender[r.gender ?? "none"];
     g.present += r.present;
     g.total += r.present + r.absent + r.excused;
     byWeek.set(r.week_start, w);
@@ -65,7 +63,7 @@ export async function getTypeRates(tx: Tx): Promise<{ name: string; sessions: nu
     join public.session_activity_types sat on sat.session_id = se.id
     join public.activity_types at on at.id = sat.activity_type_id
     left join public.attendance a on a.session_id = se.id
-    where se.status = 'held'
+    where se.status = 'held' and se.date <= current_date
     group by at.name, at.sort_order
     having count(a.*) > 0
     order by at.sort_order`;

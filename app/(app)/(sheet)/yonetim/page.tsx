@@ -39,6 +39,15 @@ export default async function OverviewPage() {
   const average = rate(totals.p, totals.t);
   const typeTotals = types.reduce((a, t) => ({ p: a.p + t.present, t: a.t + t.total }), { p: 0, t: 0 });
   const split = thisWeek ?? lastWeek;
+  // Erkek / kız ekipleri ayrı çizgi. Hiçbir ekibin cinsiyeti girilmemişse tek çizgi: tüm ekipler.
+  const missingGender = teams.filter((t) => !t.gender).length;
+  const hasGender = trend.some((w) => w.byGender.E.total + w.byGender.K.total > 0);
+  const genderSeries = hasGender
+    ? [
+        { name: tr.sheet.boys, color: "var(--chart-1)", values: trend.map((w) => rate(w.byGender.E.present, w.byGender.E.total)) },
+        { name: tr.sheet.girls, color: "var(--chart-2)", values: trend.map((w) => rate(w.byGender.K.present, w.byGender.K.total)) },
+      ]
+    : [{ name: tr.sheet.allTeams, color: "var(--chart-1)", values: trend.map((w) => weekRate(w)) }];
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 md:px-6">
@@ -74,14 +83,14 @@ export default async function OverviewPage() {
         <section className="rounded-lg border border-border bg-bg p-4 lg:col-span-3">
           <h2 className="text-sm font-semibold text-text">{tr.sheet.weeklyTrend}</h2>
           <p className="mb-3 text-xs text-text-muted">{tr.sheet.weeklyTrendSub}</p>
+          {missingGender > 0 && (
+            <p className="mb-2 text-xs text-text-muted">{tr.sheet.genderMissing(missingGender, !hasGender)}</p>
+          )}
           {trend.length ? (
             <RateLineChart
               caption={tr.sheet.weeklyTrend}
               labels={trend.map((w) => formatDateShort(w.week_start))}
-              series={[
-                { name: tr.sheet.grade10, color: "var(--chart-1)", values: trend.map((w) => rate(w.g10.present, w.g10.total)) },
-                { name: tr.sheet.grade11, color: "var(--chart-2)", values: trend.map((w) => rate(w.g11.present, w.g11.total)) },
-              ]}
+              series={genderSeries}
             />
           ) : (
             <p className="text-sm text-text-muted">{tr.common.none}</p>
