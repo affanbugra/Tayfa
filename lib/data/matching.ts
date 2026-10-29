@@ -16,10 +16,14 @@ export type Matrix = {
   recent: Record<string, string[]>;
   /** Rotasyon dışı (Liderlik, Şenlik…) buluşma sayısı */
   common: Record<string, number>;
+  /** Öneri için: seçilen haftadan önceki tüm buluşmalar (planlanmış ileri tarihliler dahil) */
+  planHistory: History;
+  planRecent: Record<string, string[]>;
   weights: Weights;
 };
 
-export async function getMatrix(tx: Tx, today: string): Promise<Matrix> {
+export async function getMatrix(tx: Tx, today: string, weekStart: string): Promise<Matrix> {
+  const until = weekStart > today ? weekStart : today;
   const [teams, types, done, settings] = await Promise.all([
     tx<MatrixTeam[]>`select id, name, grade, gender, meeting_day from public.teams where is_active`,
     tx<MatrixType[]>`
@@ -30,33 +34,51 @@ export async function getMatrix(tx: Tx, today: string): Promise<Matrix> {
       from public.sessions se
       join public.session_activity_types sat on sat.session_id = se.id
       join public.teams t on t.id = se.team_id and t.is_active
-      where se.status = 'held' and se.date <= ${today}
+      where se.status = 'held' and se.date <= ${until}
       order by se.date`,
     tx<{ matching_weights: Weights }[]>`select matching_weights from public.settings limit 1`,
   ]);
   teams.sort((a, b) => a.grade - b.grade || a.name.localeCompare(b.name, "tr"));
   const rotation = new Set(types.filter((t) => t.in_rotation).map((t) => t.id));
-  const history: History = {};
-  const dates: Record<string, string[]> = {};
-  const common: Record<string, number> = {};
-  const rotationSessions: Record<string, { date: string; types: string[] }[]> = {};
-  for (const d of done) {
-    if (rotation.has(d.type_id)) {
+
+  // Matris sadece gerçekleşenleri gösterir; öneri ise seçilen haftadan önce planlanmış sütunları da sayar
+  // (birkaç hafta ileriye plan yapılırken aynı ekibe üst üste aynı etkinlik önerilmesin).
+  function build(rows: { team_id: string; type_id: string; date: string }[]) {
+    const history: History = {};
+    const dates: Record<string, string[]> = {};
+    const common: Record<string, number> = {};
+    const sessions: Record<string, { date: string; types: string[] }[]> = {};
+    for (const d of rows) {
+      if (!rotation.has(d.type_id)) {
+        common[d.team_id] = (common[d.team_id] ?? 0) + 1;
+        continue;
+      }
       const h = ((history[d.team_id] ??= {})[d.type_id] ??= { count: 0, last: null });
       h.count++;
       h.last = d.date;
       (dates[`${d.team_id}:${d.type_id}`] ??= []).push(d.date);
-      const list = (rotationSessions[d.team_id] ??= []);
-      const lastEntry = list[list.length - 1];
-      if (lastEntry?.date === d.date) lastEntry.types.push(d.type_id);
+      const list = (sessions[d.team_id] ??= []);
+      const last = list[list.length - 1];
+      if (last?.date === d.date) last.types.push(d.type_id);
       else list.push({ date: d.date, types: [d.type_id] });
-    } else {
-      common[d.team_id] = (common[d.team_id] ?? 0) + 1;
     }
+    const recent: Record<string, string[]> = {};
+    for (const [teamId, list] of Object.entries(sessions)) recent[teamId] = list.slice(-2).flatMap((x) => x.types);
+    return { history, dates, common, recent };
   }
-  const recent: Record<string, string[]> = {};
-  for (const [teamId, list] of Object.entries(rotationSessions)) recent[teamId] = list.slice(-2).flatMap((x) => x.types);
-  return { teams, types, history, dates, recent, common, weights: { ...defaultWeights, ...(settings[0]?.matching_weights ?? {}) } };
+  const actual = build(done.filter((d) => d.date <= today));
+  const forPlan = build(done.filter((d) => d.date < weekStart));
+  return {
+    teams,
+    types,
+    history: actual.history,
+    dates: actual.dates,
+    recent: actual.recent,
+    common: actual.common,
+    planHistory: forPlan.history,
+    planRecent: forPlan.recent,
+    weights: { ...defaultWeights, ...(settings[0]?.matching_weights ?? {}) },
+  };
 }
 
 export type WeekPlan = {

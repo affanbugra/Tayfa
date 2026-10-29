@@ -15,7 +15,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   const weekStart = hafta && /^\d{4}-\d{2}-\d{2}$/.test(hafta) ? weekStartOf(hafta) : upcoming;
 
   const { matrix, plan } = await asUser(viewer.userId, async (tx) => {
-    const [matrix, plan] = await Promise.all([getMatrix(tx, today), getWeekPlan(tx, weekStart)]);
+    const [matrix, plan] = await Promise.all([getMatrix(tx, today, weekStart), getWeekPlan(tx, weekStart)]);
     return { matrix, plan };
   });
 

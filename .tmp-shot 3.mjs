@@ -1,0 +1,14 @@
+import { chromium } from "@playwright/test";
+const browser = await chromium.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" });
+const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
+await page.goto("http://localhost:3100/giris");
+await page.getByPlaceholder("E-posta").fill("yonetici@ornek.test");
+await page.getByRole("button", { name: "Giriş yap", exact: true }).click();
+await page.waitForLoadState("networkidle");
+await page.goto("http://localhost:3100/yonetim/etkinlikler");
+await page.waitForLoadState("networkidle");
+await page.getByLabel("Arda Gök · 10 Seçim").selectOption("");
+await page.getByRole("button", { name: "Planı kaydet" }).click();
+await page.getByText("Plan kaydedildi").waitFor({ timeout: 15000 });
+console.log(await page.getByText("Plan kaydedildi").innerText());
+await browser.close();
