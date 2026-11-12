@@ -5,7 +5,8 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 // Google ekranında bizim alan adımız görünür (supabase.co değil). Jeton Supabase'e verilir, oturum açılır.
 export async function POST(request: NextRequest) {
   const fail = () => NextResponse.redirect(new URL("/giris?hata=1", request.url), 303);
-  const form = await request.formData();
+  const form = await request.formData().catch(() => null);
+  if (!form) return fail();
   const credential = form.get("credential");
   const csrf = form.get("g_csrf_token");
   // Google'ın çift gönderim CSRF koruması: gövdedeki değer çerezdekiyle aynı olmalı.
