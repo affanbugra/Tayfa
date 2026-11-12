@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { devSignIn, signInWithGoogle } from "@/app/actions/auth";
+import { GoogleSignIn } from "@/components/google-sign-in";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/card";
 import { devAuthEnabled, getSessionState } from "@/lib/auth";
@@ -10,6 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const state = await getSessionState();
   if (state.status === "ok") redirect("/");
   const { hata } = await searchParams;
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
   return (
     <div className="space-y-4">
@@ -19,11 +21,17 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </div>
       {hata && <p className="rounded-lg bg-absent-bg px-3 py-2 text-sm text-absent">{tr.auth.error}</p>}
       {supabaseConfigured() ? (
-        <form action={signInWithGoogle}>
-          <Button type="submit" className="w-full">
-            <GoogleMark />
-            {tr.auth.googleButton}
-          </Button>
+        <div>
+          {googleClientId ? (
+            <GoogleSignIn clientId={googleClientId} />
+          ) : (
+            <form action={signInWithGoogle}>
+              <Button type="submit" className="w-full">
+                <GoogleMark />
+                {tr.auth.googleButton}
+              </Button>
+            </form>
+          )}
           <details className="mt-3 text-xs text-text-muted">
             <summary className="cursor-pointer select-none hover:text-text">{tr.auth.troubleTitle}</summary>
             <ul className="mt-2 list-disc space-y-1 pl-4">
@@ -31,8 +39,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 <li key={s}>{s}</li>
               ))}
             </ul>
+            {googleClientId && (
+              // Yedek: eski yöntem (Supabase üzerinden yönlendirme).
+              <form action={signInWithGoogle} className="mt-2">
+                <button type="submit" className="font-medium text-brand-strong underline">{tr.auth.altSignIn}</button>
+              </form>
+            )}
           </details>
-        </form>
+        </div>
       ) : (
         !devAuthEnabled() && <p className="text-sm text-text-muted">{tr.auth.notConfigured}</p>
       )}

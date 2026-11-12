@@ -134,16 +134,28 @@ export function TeamSheet({
     const abs = absences(s.id);
     const status = statusOfStudent(s);
     const out = !isCurrent(status);
-    const pill = (
-      <button
-        type="button"
-        onClick={() => setStatusFor({ ...s, status })}
-        aria-label={`${s.full_name}: ${tr.sheet.changeStatus} (${tr.studentStatus[status]})`}
-        className={cn("inline-flex h-5 shrink-0 items-center rounded px-1 text-[10px] font-medium whitespace-nowrap md:h-6 md:px-1.5 md:text-[11px]", statusLook[status])}
-      >
-        {tr.studentStatusShort[status]}
-      </button>
-    );
+    // Normal durum ("Devam") boş görünür; sadece istisnalar etiketlenir. Boş alana dokunmak da durumu değiştirir.
+    const pill =
+      status === "active" ? (
+        <button
+          type="button"
+          onClick={() => setStatusFor({ ...s, status })}
+          aria-label={`${s.full_name}: ${tr.sheet.changeStatus} (${tr.studentStatus[status]})`}
+          title={tr.studentStatus[status]}
+          className="inline-flex h-6 w-10 items-center justify-center rounded text-[11px] text-border hover:bg-surface hover:text-text-muted"
+        >
+          ·
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setStatusFor({ ...s, status })}
+          aria-label={`${s.full_name}: ${tr.sheet.changeStatus} (${tr.studentStatus[status]})`}
+          className={cn("inline-flex h-5 shrink-0 items-center rounded px-1 text-[10px] font-medium whitespace-nowrap md:h-6 md:px-1.5 md:text-[11px]", statusLook[status])}
+        >
+          {tr.studentStatusShort[status]}
+        </button>
+      );
     return (
       <tr key={s.id} className={out ? "text-removed" : undefined}>
         <td className={cn("sticky left-0 z-10 w-32 max-w-32 min-w-32 border-b border-border px-2 py-1 md:w-52 md:max-w-52 md:min-w-52 md:px-3", out ? "bg-surface" : "bg-bg")}>

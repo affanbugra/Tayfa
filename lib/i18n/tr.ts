@@ -22,6 +22,7 @@ export const tr = {
     notConfigured: "Giriş henüz yapılandırılmadı.",
     error: "Giriş yapılamadı. Tekrar deneyin.",
     troubleTitle: "Giriş olmuyor mu?",
+    altSignIn: "Diğer yöntemle giriş yap",
     troubleSteps: [
       "Google \"500. Bu bir hata\" derse: tarayıcıda gizli pencere (InPrivate) açıp tekrar dene ya da Chrome kullan.",
       "Tarayıcıda birden çok Google hesabı açıksa, davet edilen hesabı seç ya da diğerlerinden çık.",
@@ -236,6 +237,10 @@ export const tr = {
     programShort: "Program ort.",
     teamSettings: "Ekip ayarları",
     teamsHeading: "Ekipler",
+    missingTitle: "Yoklaması girilmeyen ekipler",
+    missingCount: (n: number) => `Bu hafta yoklamasını girmeyen ${n} ekip`,
+    allWaiting: (n: number) => `Bu hafta sonunun yoklamaları bekleniyor (${n} ekip).`,
+    allEntered: "Bu hafta sonu bütün ekipler yoklamayı girdi.",
     newTeam: "Yeni ekip",
     createTeam: "Ekibi oluştur",
     leaderName: "Lider adı soyadı",

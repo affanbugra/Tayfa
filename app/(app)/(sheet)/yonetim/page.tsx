@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { RateBars, RateLineChart, SplitBar } from "@/components/charts";
 import { StatTile } from "@/components/stat-tile";
 import { TeamsGrid } from "@/components/teams-grid";
@@ -35,6 +36,8 @@ export default async function OverviewPage() {
 
   const sunday = addDaysIso(ws, 1);
   const overdue = (day: string | null) => (day === "saturday" ? today > ws : today > sunday);
+  const missing = teams.filter((t) => !t.this_week && overdue(t.meeting_day));
+  const waiting = teams.filter((t) => !t.this_week && !overdue(t.meeting_day)).length;
   const totals = teams.reduce((a, t) => ({ p: a.p + t.recent_present, t: a.t + t.recent_total }), { p: 0, t: 0 });
   const average = rate(totals.p, totals.t);
   const typeTotals = types.reduce((a, t) => ({ p: a.p + t.present, t: a.t + t.total }), { p: 0, t: 0 });
@@ -55,6 +58,27 @@ export default async function OverviewPage() {
         <h1 className="font-display text-xl font-semibold text-text">{tr.sheet.tabSummary}</h1>
         <p className="text-sm text-text-muted">{formatDateTr(ws)} haftası</p>
       </div>
+
+      {/* Önce eylem: bu hafta yoklamasını girmeyen ekipler */}
+      {missing.length > 0 ? (
+        <section className="rounded-lg bg-absent-bg px-3 py-2.5 md:px-4" aria-label={tr.sheet.missingTitle}>
+          <p className="text-sm font-semibold text-absent">{tr.sheet.missingCount(missing.length)}</p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {missing.map((t) => (
+              <li key={t.id}>
+                <Link href={`/yonetim/ekipler/${t.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-absent/30 bg-bg px-2.5 text-xs font-medium text-text hover:border-absent">
+                  {t.name}
+                  {t.meeting_day && <span className="text-text-muted">· {tr.days[t.meeting_day].slice(0, 3)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : waiting > 0 ? (
+        <p className="rounded-lg bg-surface px-3 py-2.5 text-sm text-text-muted md:px-4">{tr.sheet.allWaiting(waiting)}</p>
+      ) : (
+        <p className="rounded-lg bg-present-bg px-3 py-2.5 text-sm font-medium text-present md:px-4">{tr.sheet.allEntered}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label={tr.admin.kpiActive} value={activeStudents} sub={`${teams.length} ekip`} />

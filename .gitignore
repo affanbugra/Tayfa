@@ -3,6 +3,7 @@
 *.csv
 .env*
 !.env.example
+!.env.production
 node_modules/
 .next/
 *.tsbuildinfo
