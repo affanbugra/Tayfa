@@ -24,6 +24,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <GoogleMark />
             {tr.auth.googleButton}
           </Button>
+          <details className="mt-3 text-xs text-text-muted">
+            <summary className="cursor-pointer select-none hover:text-text">{tr.auth.troubleTitle}</summary>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              {tr.auth.troubleSteps.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </details>
         </form>
       ) : (
         !devAuthEnabled() && <p className="text-sm text-text-muted">{tr.auth.notConfigured}</p>

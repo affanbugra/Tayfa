@@ -129,6 +129,8 @@ export default async function OverviewPage() {
         rows={teams.map((t) => ({
           id: t.id,
           name: t.name,
+          leaderName: t.leader_name ?? t.name.replace(/\s*·\s*\d+$/, ""),
+          grade: t.grade,
           email: t.leader_email ?? t.invited_email ?? "",
           signedIn: Boolean(t.leader_email),
           day: t.meeting_day ?? "",

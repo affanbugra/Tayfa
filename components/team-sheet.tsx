@@ -6,7 +6,7 @@ import { AlertCircle, Copy, Download, Pencil, Plus, UserPlus, X } from "lucide-r
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { quickAddStudent, removeSession, saveSession, setAttendance } from "@/app/actions/attendance";
+import { quickAddStudents, removeSession, saveSession, setAttendance } from "@/app/actions/attendance";
 import { setStudentStatus } from "@/app/actions/students";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/card";
@@ -306,7 +306,15 @@ export function TeamSheet({
               </tfoot>
             )}
           </table>
-          {students.length === 0 && <p className="p-6 text-sm text-text-muted">{tr.sheet.noStudents}</p>}
+          {students.length === 0 && (
+            <div className="space-y-3 p-6">
+              <p className="text-sm text-text">{tr.sheet.emptyTeam}</p>
+              <Button type="button" onClick={() => setAdding(true)}>
+                <UserPlus size={18} aria-hidden />
+                {tr.sheet.addFirstStudents}
+              </Button>
+            </div>
+          )}
           {students.length > 0 && sessions.length === 0 && <p className="p-6 text-sm text-text-muted">{tr.sheet.noSessions}</p>}
         </div>
       </div>
@@ -558,27 +566,42 @@ function NoteEditor({ initial, onClose, onSave }: { initial: string; onClose: ()
 }
 
 function AddStudent({ teamId, fullHref, onClose, onAdded }: { teamId: string; fullHref: string; onClose: () => void; onAdded: () => void }) {
-  const [name, setName] = useState("");
+  const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const count = text.split(/\r?\n/).filter((l) => l.trim().length >= 2).length;
   return (
     <Modal title={tr.sheet.addStudent} onClose={onClose}>
       <form
-        className="space-y-4"
+        className="space-y-3"
         onSubmit={async (e) => {
           e.preventDefault();
           setPending(true);
-          const res = await quickAddStudent(teamId, name);
+          const res = await quickAddStudents(teamId, text);
           setPending(false);
           if (!res.ok) return setError(res.error);
           onAdded();
         }}
       >
-        <input autoFocus required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder={tr.session.fullName} aria-label={tr.session.fullName} className={inputClass} />
+        <label className="block">
+          <span className="mb-1 block text-sm text-text-muted">{tr.sheet.bulkHint}</span>
+          <textarea
+            autoFocus
+            required
+            rows={6}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={tr.sheet.bulkPlaceholder}
+            aria-label={tr.sheet.addStudent}
+            className={cn(inputClass, "min-h-36 py-2 leading-6")}
+          />
+        </label>
         {error && <p className="text-sm text-absent" role="alert">{error}</p>}
         <div className="flex items-center justify-between gap-2">
           <Link href={fullHref} className="text-sm text-brand-strong hover:underline">{tr.sheet.addStudentFull}</Link>
-          <Button type="submit" disabled={pending}>{tr.session.add}</Button>
+          <Button type="submit" disabled={pending || count === 0}>
+            {count > 1 ? `${count} ${tr.sheet.bulkAdd}` : tr.session.add}
+          </Button>
         </div>
       </form>
     </Modal>

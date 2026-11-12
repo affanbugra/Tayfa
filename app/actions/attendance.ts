@@ -111,20 +111,34 @@ export async function setAttendance(input: {
 
 export type FormState = { error?: string; ok?: boolean } | null;
 
-export async function quickAddStudent(teamId: string, fullName: string): Promise<{ ok: true; id: string; fullName: string } | { ok: false; error: string }> {
+/** Toplu öğrenci ekleme: her satıra bir ad. Yeni lider ekibini tek seferde kurar (ör. WhatsApp listesinden yapıştırarak). */
+export async function quickAddStudents(teamId: string, text: string): Promise<{ ok: true; added: number } | { ok: false; error: string }> {
+  // Satır başındaki "1." "2)" "-" gibi numaraları ve fazla boşlukları temizle.
+  const names = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\s*(\d+[.)-]?|[-•*])\s*/, "").replace(/\s+/g, " ").trim())
+    .filter((l) => l.length >= 2);
+  const parsed = z.object({ teamId: uuid, names: z.array(z.string().max(120)).min(1, "En az bir ad yazın").max(60, "En fazla 60 kişi") }).safeParse({ teamId, names });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Bilgiler geçersiz" };
   try {
     const viewer = await requireViewer();
-    const v = z.object({ teamId: uuid, fullName: z.string().trim().min(2).max(120) }).parse({ teamId, fullName });
-    v.fullName = toTitleCaseTr(v.fullName) ?? v.fullName;
-    const id = await asUser(viewer.userId, async (tx) => {
-      const [row] = await tx<{ id: string }[]>`
-        insert into public.students (team_id, full_name, source, joined_at) values (${v.teamId}, ${v.fullName}, 'app', ${todayIstanbul()})
-        returning id`;
-      return row.id;
+    const added = await asUser(viewer.userId, async (tx) => {
+      const existing = new Set(
+        (await tx<{ full_name: string }[]>`select full_name from public.students where team_id = ${teamId}`).map((r) => r.full_name.toLocaleLowerCase("tr")),
+      );
+      let n = 0;
+      for (const raw of parsed.data.names) {
+        const fullName = toTitleCaseTr(raw) ?? raw;
+        if (existing.has(fullName.toLocaleLowerCase("tr"))) continue; // aynı ad zaten ekipte
+        existing.add(fullName.toLocaleLowerCase("tr"));
+        await tx`insert into public.students (team_id, full_name, source, joined_at) values (${teamId}, ${fullName}, 'app', ${todayIstanbul()})`;
+        n++;
+      }
+      return n;
     });
     revalidatePath("/", "layout");
-    return { ok: true, id, fullName: v.fullName };
+    return { ok: true, added };
   } catch {
-    return { ok: false, error: "Öğrenci eklenemedi" };
+    return { ok: false, error: "Öğrenciler eklenemedi" };
   }
 }

@@ -72,3 +72,22 @@ test("davetsiz kullanıcı erişemez", async ({ page }) => {
   await expect(page).toHaveURL(/\/erisim-yok$/);
   await expect(page.getByText("Erişiminiz yok")).toBeVisible();
 });
+
+test("yönetici yeni ekip ve lider açar, lider ekibini toplu ekler", async ({ page, browser }) => {
+  await login(page, "yonetici@ornek.test");
+  await page.getByRole("button", { name: "Yeni ekip" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Lider adı soyadı").fill("test lider");
+  await dialog.getByLabel("Lider e-postası").fill("test.lider@ornek.test");
+  await dialog.getByRole("button", { name: "Ekibi oluştur" }).click();
+  await expect(page.getByRole("heading", { name: "Test Lider · 10" })).toBeVisible();
+
+  const leader = await (await browser.newContext()).newPage();
+  await login(leader, "test.lider@ornek.test");
+  await expect(leader).toHaveURL(/\/ekibim$/);
+  await leader.getByRole("button", { name: "Öğrenci listeni ekle" }).click();
+  await leader.getByRole("dialog").getByRole("textbox").fill("1. ayşe kaya\n2) Mehmet DEMİR\n- Elif Su\nAyşe Kaya");
+  await leader.getByRole("dialog").getByRole("button", { name: /öğrenciyi ekle/ }).click();
+  await expect(leader.getByText(/3 öğrenci/)).toBeVisible();
+  await expect(leader.getByRole("link", { name: "Mehmet Demir" })).toBeVisible();
+});

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
-import { asUser } from "@/lib/db";
+import { asUser, type Tx } from "@/lib/db";
+import { toTitleCaseTr } from "@/lib/import/normalize";
 import type { FormState } from "./attendance";
 
 const uuid = z.string().uuid();
@@ -38,32 +39,35 @@ export async function inviteUser(_prev: FormState, formData: FormData): Promise<
 
 export type InlineResult = { ok: true } | { ok: false; error: string };
 
+/** Ekibin liderini e-postayla belirler (aynı transaction içinde). Boş e-posta lideri kaldırır. */
+async function assignLeader(tx: Tx, teamId: string, email: string, invitedBy: string) {
+  // Ekibin tek lideri olur: bu ekibe bağlı başka lider daveti kalmaz.
+  await tx`delete from public.invitations where team_id = ${teamId} and role = 'leader' and email <> ${email}`;
+  await tx`update public.teams set leader_id = null where id = ${teamId}`;
+  if (!email) return;
+  const [existing] = await tx<{ role: string }[]>`select role from public.invitations where email = ${email}`;
+  if (existing?.role === "admin") throw new Error("admin");
+  await tx`
+    insert into public.invitations (email, role, team_id, invited_by) values (${email}, 'leader', ${teamId}, ${invitedBy})
+    on conflict (email) do update set role = 'leader', team_id = excluded.team_id`;
+  // Kişi daha önce giriş yaptıysa hemen bağlanır.
+  const [p] = await tx<{ id: string }[]>`update public.profiles set role = 'leader' where email = ${email} returning id`;
+  if (p) {
+    await tx`update public.teams set leader_id = null where leader_id = ${p.id}`;
+    await tx`update public.teams set leader_id = ${p.id} where id = ${teamId}`;
+  }
+}
+
+const leaderEmail = z.union([z.literal(""), z.string().trim().toLowerCase().email("Geçerli bir e-posta girin")]);
+
 /** Özet tablosundan: ekibin liderini e-postayla belirler. Boş e-posta lideri kaldırır. */
 export async function setTeamLeaderEmail(teamId: string, email: string): Promise<InlineResult> {
-  const parsed = z
-    .object({ teamId: uuid, email: z.union([z.literal(""), z.string().trim().toLowerCase().email()]) })
-    .safeParse({ teamId, email: email.trim().toLowerCase() });
+  const parsed = z.object({ teamId: uuid, email: leaderEmail }).safeParse({ teamId, email: email.trim().toLowerCase() });
   if (!parsed.success) return { ok: false, error: "Geçerli bir e-posta girin" };
   const v = parsed.data;
   try {
     const viewer = await requireAdmin();
-    await asUser(viewer.userId, async (tx) => {
-      // Ekibin tek lideri olur: bu ekibe bağlı başka lider daveti kalmaz.
-      await tx`delete from public.invitations where team_id = ${v.teamId} and role = 'leader' and email <> ${v.email}`;
-      await tx`update public.teams set leader_id = null where id = ${v.teamId}`;
-      if (!v.email) return;
-      const [existing] = await tx<{ role: string }[]>`select role from public.invitations where email = ${v.email}`;
-      if (existing?.role === "admin") throw new Error("admin");
-      await tx`
-        insert into public.invitations (email, role, team_id, invited_by) values (${v.email}, 'leader', ${v.teamId}, ${viewer.userId})
-        on conflict (email) do update set role = 'leader', team_id = excluded.team_id`;
-      // Kişi daha önce giriş yaptıysa hemen bağlanır.
-      const [p] = await tx<{ id: string }[]>`update public.profiles set role = 'leader' where email = ${v.email} returning id`;
-      if (p) {
-        await tx`update public.teams set leader_id = null where leader_id = ${p.id}`;
-        await tx`update public.teams set leader_id = ${p.id} where id = ${v.teamId}`;
-      }
-    });
+    await asUser(viewer.userId, (tx) => assignLeader(tx, v.teamId, v.email, viewer.userId));
   } catch (e) {
     if (e instanceof Error && e.message === "admin") return { ok: false, error: "Bu e-posta yönetici olarak kayıtlı" };
     return { ok: false, error: "Kaydedilemedi" };
@@ -72,24 +76,72 @@ export async function setTeamLeaderEmail(teamId: string, email: string): Promise
   return { ok: true };
 }
 
-/** Özet tablosundan: buluşma günü ya da cinsiyet. */
-export async function setTeamField(teamId: string, field: "meeting_day" | "gender", value: string): Promise<InlineResult> {
-  const schema = field === "meeting_day" ? z.enum(["saturday", "sunday", ""]) : z.enum(["K", "E", ""]);
-  const parsed = z.object({ teamId: uuid, value: schema }).safeParse({ teamId, value });
-  if (!parsed.success) return { ok: false, error: "Bilgiler geçersiz" };
+/**
+ * Yeni ekip açar ya da var olanı düzenler: lider adı, sınıf, cinsiyet, gün, lider e-postası, arşiv.
+ * Ekip adı "Lider Adı · Sınıf" biçiminde lider adından üretilir (lider değişince ad da değişir).
+ */
+export async function saveTeam(input: {
+  teamId?: string;
+  leaderName: string;
+  grade: number;
+  gender: string;
+  day: string;
+  email: string;
+  active: boolean;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const parsed = z
+    .object({
+      teamId: uuid.optional(),
+      leaderName: z.string().trim().min(2, "Lider adı gerekli").max(120),
+      grade: z.union([z.literal(10), z.literal(11)]),
+      gender: z.enum(["K", "E", ""]),
+      day: z.enum(["saturday", "sunday", ""]),
+      email: leaderEmail,
+      active: z.boolean(),
+    })
+    .safeParse({ ...input, email: input.email.trim().toLowerCase() });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Bilgiler geçersiz" };
+  const v = parsed.data;
+  const leaderName = toTitleCaseTr(v.leaderName) ?? v.leaderName;
+  const fields = {
+    name: `${leaderName} · ${v.grade}`,
+    leader_name: leaderName,
+    grade: v.grade,
+    gender: v.gender || null,
+    meeting_day: v.day || null,
+    is_active: v.active,
+  };
   try {
     const viewer = await requireAdmin();
-    const val = parsed.data.value || null;
-    await asUser(viewer.userId, (tx) =>
-      field === "meeting_day"
-        ? tx`update public.teams set meeting_day = ${val} where id = ${parsed.data.teamId}`
-        : tx`update public.teams set gender = ${val} where id = ${parsed.data.teamId}`,
-    );
-  } catch {
+    const id = await asUser(viewer.userId, async (tx) => {
+      let id = v.teamId;
+      if (id) {
+        await tx`update public.teams set ${tx(fields)} where id = ${id}`;
+        const [cur] = await tx<{ email: string | null }[]>`
+          select coalesce(p.email, (select i.email from public.invitations i where i.team_id = t.id and i.role = 'leader' limit 1)) as email
+          from public.teams t left join public.profiles p on p.id = t.leader_id where t.id = ${id}`;
+        if ((cur?.email ?? "") !== v.email) await assignLeader(tx, id, v.email, viewer.userId);
+      } else {
+        const [row] = await tx<{ id: string }[]>`insert into public.teams ${tx(fields)} returning id`;
+        id = row.id;
+        if (v.email) await assignLeader(tx, id, v.email, viewer.userId);
+      }
+      return id;
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, id };
+  } catch (e) {
+    if (e instanceof Error && e.message === "admin") return { ok: false, error: "Bu e-posta yönetici olarak kayıtlı" };
     return { ok: false, error: "Kaydedilemedi" };
   }
+}
+
+/** Ayarlar: arşivlenmiş ekibi geri açar. */
+export async function reactivateTeam(formData: FormData) {
+  const viewer = await requireAdmin();
+  const id = uuid.parse(formData.get("teamId"));
+  await asUser(viewer.userId, (tx) => tx`update public.teams set is_active = true where id = ${id}`);
   revalidatePath("/", "layout");
-  return { ok: true };
 }
 
 export async function deleteInvitation(formData: FormData) {

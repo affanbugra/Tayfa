@@ -226,6 +226,8 @@ Liderin tek ekranı; Excel'deki sayfasının karşılığı. Bileşen: `componen
 - Liderin tablosunun üstünde gizlenebilir istatistik şeridi (`components/team-stats.tsx`): son buluşma, son 4 hafta (önceki 4 haftaya göre), program ortalaması (ekip kaç puan önde/geride; `program_week_rates()` security definer fonksiyonundan, sadece toplamlar), takip edilecek; geniş ekranda buluşma başına katılım sütunları. Telefonda kartlar yana kayan tek satır.
 - Grafikler bağımlılıksız SVG (`components/charts.tsx`), renkler `--chart-*` token'ları (dataviz doğrulayıcısından geçti).
 - Lider e-postası `setTeamLeaderEmail` ile davet listesine yazılır; ekibin tek lider daveti kalır, kişi daha önce girdiyse hemen bağlanır.
+- **Yeni ekip / lider (12 Kasım 2026, kullanıcı isteği: sistem devredilince yönetim kimseye ihtiyaç duymadan lider ekleyebilsin):** Özet'te "+ Yeni ekip" → tek pencere: lider adı soyadı, sınıf, lider e-postası, gün, cinsiyet (`saveTeam`). Ekip adı "Lider Adı · Sınıf" olarak üretilir; aynı pencere mevcut ekipte lider değişimi ve **arşivleme** içindir (arşivlenen ekip listelerden/istatistikten çıkar, Ayarlar'dan "Geri aç"). Lider girince boş ekibinde "Öğrenci listeni ekle" görür; öğrenci ekleme penceresi **toplu**: her satıra bir ad (numara/tire temizlenir, ekipte olan ad atlanır; `quickAddStudents`).
+- Giriş sayfasında "Giriş olmuyor mu?" açılır notu: Google 500 hatası, birden çok hesap, uygulama içi tarayıcı, Gmail olmayan davet.
 
 ### 6.7 Yönetim — Raporlar (`/yonetim/raporlar`)
 - Üstte filtreler: **dönem** (Son hafta · Son 4 hafta · Son 3 ay · Tüm dönem · Özel aralık), sınıf (10/11), cinsiyet, gün, ekip.

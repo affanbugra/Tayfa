@@ -2,11 +2,11 @@
 
 // Yönetim özeti: ekip listesi istatistik odaklıdır. Tek seferlik ayarlar (lider e-postası, gün, cinsiyet)
 // ekip adının yanındaki küçük etiketten açılan pencerede düzenlenir.
-import { Mail, Settings2, X } from "lucide-react";
+import { Mail, Plus, Settings2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { setTeamField, setTeamLeaderEmail } from "@/app/actions/admin";
+import { saveTeam } from "@/app/actions/admin";
 import { Sparkline } from "@/components/charts";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { tr } from "@/lib/i18n/tr";
 export type TeamGridRow = {
   id: string;
   name: string;
+  leaderName: string;
+  grade: number;
   email: string;
   signedIn: boolean;
   day: string;
@@ -39,7 +41,7 @@ const dayShort: Record<string, string> = { saturday: "Cmt", sunday: "Paz" };
 type SortKey = "name" | "rate" | "atRisk" | "active";
 
 export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: number | null }) {
-  const [edit, setEdit] = useState<TeamGridRow | null>(null);
+  const [edit, setEdit] = useState<TeamGridRow | "new" | null>(null);
   const [sort, setSort] = useState<SortKey>("name");
   const sorted = [...rows].sort((a, b) =>
     sort === "name" ? a.name.localeCompare(b.name, "tr") : sort === "rate" ? (b.rate ?? -1) - (a.rate ?? -1) : sort === "atRisk" ? b.atRisk - a.atRisk : b.active - a.active,
@@ -55,6 +57,15 @@ export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: num
 
   return (
     <>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-text">
+          {tr.sheet.teamsHeading} <span className="font-normal text-text-muted">({rows.length})</span>
+        </h2>
+        <Button type="button" variant="secondary" onClick={() => setEdit("new")} className="min-h-10">
+          <Plus size={16} aria-hidden />
+          {tr.sheet.newTeam}
+        </Button>
+      </div>
       {/* Telefon: her ekip iki satır, yana kaydırma yok */}
       <ul className="divide-y divide-border rounded-lg border border-border bg-bg md:hidden">
         {sorted.map((r) => (
@@ -117,7 +128,7 @@ export function TeamsGrid({ rows, average }: { rows: TeamGridRow[]; average: num
           </tbody>
         </table>
       </div>
-      {edit && <TeamSettings row={edit} onClose={() => setEdit(null)} />}
+      {edit && <TeamSettings row={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
     </>
   );
 }
@@ -162,13 +173,16 @@ function RateCell({ value, average }: { value: number | null; average: number | 
   );
 }
 
-function TeamSettings({ row, onClose }: { row: TeamGridRow; onClose: () => void }) {
+function TeamSettings({ row, onClose }: { row: TeamGridRow | null; onClose: () => void }) {
   const router = useRouter();
-  const [email, setEmail] = useState(row.email);
-  const [day, setDay] = useState(row.day);
-  const [gender, setGender] = useState(row.gender);
+  const [leaderName, setLeaderName] = useState(row?.leaderName ?? "");
+  const [grade, setGrade] = useState(row?.grade ?? 10);
+  const [email, setEmail] = useState(row?.email ?? "");
+  const [day, setDay] = useState(row?.day ?? "");
+  const [gender, setGender] = useState(row?.gender ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -176,26 +190,23 @@ function TeamSettings({ row, onClose }: { row: TeamGridRow; onClose: () => void 
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function save() {
+  async function save(active = true) {
     setPending(true);
     setError(null);
-    const results = await Promise.all([
-      email.trim().toLowerCase() !== row.email ? setTeamLeaderEmail(row.id, email) : null,
-      day !== row.day ? setTeamField(row.id, "meeting_day", day) : null,
-      gender !== row.gender ? setTeamField(row.id, "gender", gender) : null,
-    ]);
+    const res = await saveTeam({ teamId: row?.id, leaderName, grade, gender, day, email, active });
     setPending(false);
-    const failed = results.find((r) => r && !r.ok);
-    if (failed && !failed.ok) return setError(failed.error);
+    if (!res.ok) return setError(res.error);
     onClose();
-    router.refresh();
+    if (row) router.refresh();
+    else router.push(`/yonetim/ekipler/${res.id}`);
   }
 
+  const title = row ? row.name : tr.sheet.newTeam;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={`${row.name}: ${tr.sheet.teamSettings}`} className="w-full max-w-md rounded-t-xl bg-bg p-5 shadow-lg sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md rounded-t-xl bg-bg p-5 shadow-lg sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-text">{row.name}</h2>
+          <h2 className="text-base font-semibold text-text">{title}</h2>
           <button type="button" onClick={onClose} aria-label={tr.common.cancel} className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-surface">
             <X size={18} aria-hidden />
           </button>
@@ -207,9 +218,22 @@ function TeamSettings({ row, onClose }: { row: TeamGridRow; onClose: () => void 
             void save();
           }}
         >
+          <div className="grid grid-cols-[1fr_6rem] gap-3">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-text">{tr.sheet.leaderName}</span>
+              <input value={leaderName} onChange={(e) => setLeaderName(e.target.value)} required minLength={2} autoFocus={!row} className={inputClass} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-text">{tr.admin.colGrade}</span>
+              <select value={grade} onChange={(e) => setGrade(Number(e.target.value))} className={inputClass}>
+                <option value={10}>10</option>
+                <option value={11}>11</option>
+              </select>
+            </label>
+          </div>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-text">{tr.sheet.leaderEmail}</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr.sheet.emailPlaceholder} className={inputClass} autoFocus={!row.email} />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr.sheet.emailPlaceholder} className={inputClass} />
             <span className="mt-1 block text-xs text-text-muted">{tr.sheet.emailHint}</span>
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -231,9 +255,22 @@ function TeamSettings({ row, onClose }: { row: TeamGridRow; onClose: () => void 
             </label>
           </div>
           {error && <p className="text-sm text-absent" role="alert">{error}</p>}
-          <div className="flex justify-end">
-            <Button type="submit" disabled={pending}>{tr.common.save}</Button>
+          <div className="flex items-center justify-between gap-2">
+            {row ? (
+              <Button
+                type="button"
+                variant="danger"
+                disabled={pending}
+                onClick={() => (confirmArchive ? void save(false) : setConfirmArchive(true))}
+              >
+                {confirmArchive ? tr.sheet.archiveSure : tr.sheet.archiveTeam}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button type="submit" disabled={pending}>{row ? tr.common.save : tr.sheet.createTeam}</Button>
           </div>
+          {row && <p className="text-xs text-text-muted">{tr.sheet.archiveHint}</p>}
         </form>
       </div>
     </div>
