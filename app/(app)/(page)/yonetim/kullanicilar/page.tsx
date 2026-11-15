@@ -1,4 +1,5 @@
-import { deleteInvitation, inviteUser, setProfileActive } from "@/app/actions/admin";
+import { inviteUser } from "@/app/actions/admin";
+import { RemoveUserButton } from "@/components/remove-user-button";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, PageTitle, inputClass } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/auth";
@@ -18,7 +19,7 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <PageTitle sub="Sadece bu listedeki e-postalar Google ile giriş yapabilir.">{tr.admin.usersTitle}</PageTitle>
+      <PageTitle sub={tr.admin.usersHint}>{tr.admin.usersTitle}</PageTitle>
 
       <Card title={tr.admin.invite}>
         <ActionForm action={inviteUser} variant="primary" submitLabel={tr.admin.invite} className="grid gap-3 sm:grid-cols-4">
@@ -71,21 +72,7 @@ export default async function UsersPage() {
                   )}
                 </td>
                 <td className="border-b border-border px-3 py-2 text-right whitespace-nowrap">
-                  {i.profile_id && i.profile_id !== viewer.userId && (
-                    <form action={setProfileActive} className="inline">
-                      <input type="hidden" name="id" value={i.profile_id} />
-                      <input type="hidden" name="active" value={String(!i.is_active)} />
-                      <button type="submit" className="min-h-9 px-2 text-sm text-brand-strong hover:underline">
-                        {i.is_active ? tr.admin.deactivate : tr.admin.activate}
-                      </button>
-                    </form>
-                  )}
-                  {!i.profile_id && (
-                    <form action={deleteInvitation} className="inline">
-                      <input type="hidden" name="id" value={i.id} />
-                      <button type="submit" className="min-h-9 px-2 text-sm text-absent hover:underline">{tr.admin.removeInvite}</button>
-                    </form>
-                  )}
+                  {i.profile_id !== viewer.userId && <RemoveUserButton invitationId={i.id} />}
                 </td>
               </tr>
             ))}

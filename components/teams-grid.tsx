@@ -234,7 +234,18 @@ function TeamSettings({ row, onClose }: { row: TeamGridRow | null; onClose: () =
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-text">{tr.sheet.leaderEmail}</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr.sheet.emailPlaceholder} className={inputClass} />
-            <span className="mt-1 block text-xs text-text-muted">{tr.sheet.emailHint}</span>
+            {row?.email && !email ? (
+              <span className="mt-1 block text-xs font-medium text-absent">{tr.sheet.leaderWillBeRemoved}</span>
+            ) : (
+              <span className="mt-1 flex items-center justify-between gap-2 text-xs text-text-muted">
+                {tr.sheet.emailHint}
+                {row?.email && (
+                  <button type="button" onClick={() => setEmail("")} className="shrink-0 font-medium text-absent hover:underline">
+                    {tr.sheet.removeLeader}
+                  </button>
+                )}
+              </span>
+            )}
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">

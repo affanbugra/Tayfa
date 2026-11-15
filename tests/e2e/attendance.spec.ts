@@ -91,3 +91,28 @@ test("yönetici yeni ekip ve lider açar, lider ekibini toplu ekler", async ({ p
   await expect(leader.getByText(/3 öğrenci/)).toBeVisible();
   await expect(leader.getByRole("link", { name: "Mehmet Demir" })).toBeVisible();
 });
+
+test("yönetici lideri siler, lider giremez; yeniden eklenince girer", async ({ page, browser }) => {
+  await login(page, "yonetici@ornek.test");
+  await expect(page).toHaveURL(/\/yonetim$/);
+  await page.goto("/yonetim/kullanicilar");
+  const row = page.locator("tr", { hasText: /^lider@ornek\.test/ });
+  await row.getByRole("button", { name: "Sil" }).click();
+  await row.getByRole("button", { name: /Emin misin/ }).click();
+  await expect(row).toHaveCount(0);
+
+  const leader = await (await browser.newContext()).newPage();
+  await login(leader, "lider@ornek.test");
+  await expect(leader).toHaveURL(/\/erisim-yok$/);
+
+  // Aynı e-posta ekip penceresinden yeniden eklenir
+  await page.goto("/yonetim");
+  await page.getByRole("button", { name: "Deniz Ak · 10: Ekip ayarları" }).first().click();
+  await page.getByRole("dialog").getByLabel("Lider e-postası").fill("lider@ornek.test");
+  await page.getByRole("dialog").getByRole("button", { name: "Kaydet" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+
+  const again = await (await browser.newContext()).newPage();
+  await login(again, "lider@ornek.test");
+  await expect(again).toHaveURL(/\/ekibim$/);
+});

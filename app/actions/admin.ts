@@ -24,7 +24,7 @@ export async function inviteUser(_prev: FormState, formData: FormData): Promise<
         insert into public.invitations (email, role, team_id, invited_by) values (${v.email}, ${v.role}, ${v.role === "leader" ? v.teamId : null}, ${viewer.userId})
         on conflict (email) do update set role = excluded.role, team_id = excluded.team_id`;
       // Kişi daha önce giriş yaptıysa rolü ve ekibi hemen güncellenir.
-      const [p] = await tx<{ id: string }[]>`update public.profiles set role = ${v.role} where email = ${v.email} returning id`;
+      const [p] = await tx<{ id: string }[]>`update public.profiles set role = ${v.role}, is_active = true where email = ${v.email} returning id`;
       if (p && v.role === "leader" && v.teamId) {
         await tx`update public.teams set leader_id = null where leader_id = ${p.id} and id <> ${v.teamId}`;
         await tx`update public.teams set leader_id = ${p.id} where id = ${v.teamId}`;
@@ -41,8 +41,10 @@ export type InlineResult = { ok: true } | { ok: false; error: string };
 
 /** Ekibin liderini e-postayla belirler (aynı transaction içinde). Boş e-posta lideri kaldırır. */
 async function assignLeader(tx: Tx, teamId: string, email: string, invitedBy: string) {
-  // Ekibin tek lideri olur: bu ekibe bağlı başka lider daveti kalmaz.
-  await tx`delete from public.invitations where team_id = ${teamId} and role = 'leader' and email <> ${email}`;
+  // Ekibin tek lideri olur: bu ekibe bağlı başka lider daveti kalmaz; eski liderin hesabı da kapanır.
+  const removed = await tx<{ email: string }[]>`
+    delete from public.invitations where team_id = ${teamId} and role = 'leader' and email <> ${email} returning email`;
+  for (const r of removed) await tx`update public.profiles set is_active = false where email = ${r.email} and role = 'leader'`;
   await tx`update public.teams set leader_id = null where id = ${teamId}`;
   if (!email) return;
   const [existing] = await tx<{ role: string }[]>`select role from public.invitations where email = ${email}`;
@@ -51,7 +53,7 @@ async function assignLeader(tx: Tx, teamId: string, email: string, invitedBy: st
     insert into public.invitations (email, role, team_id, invited_by) values (${email}, 'leader', ${teamId}, ${invitedBy})
     on conflict (email) do update set role = 'leader', team_id = excluded.team_id`;
   // Kişi daha önce giriş yaptıysa hemen bağlanır.
-  const [p] = await tx<{ id: string }[]>`update public.profiles set role = 'leader' where email = ${email} returning id`;
+  const [p] = await tx<{ id: string }[]>`update public.profiles set role = 'leader', is_active = true where email = ${email} returning id`;
   if (p) {
     await tx`update public.teams set leader_id = null where leader_id = ${p.id}`;
     await tx`update public.teams set leader_id = ${p.id} where id = ${teamId}`;
@@ -144,19 +146,33 @@ export async function reactivateTeam(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
-export async function deleteInvitation(formData: FormData) {
-  const viewer = await requireAdmin();
-  const id = uuid.parse(formData.get("id"));
-  await asUser(viewer.userId, (tx) => tx`delete from public.invitations where id = ${id}`);
-  revalidatePath("/yonetim/kullanicilar");
-}
-
-export async function setProfileActive(formData: FormData) {
-  const viewer = await requireAdmin();
-  const v = z.object({ id: uuid, active: z.enum(["true", "false"]) }).parse({ id: formData.get("id"), active: formData.get("active") });
-  if (v.id === viewer.userId) return;
-  await asUser(viewer.userId, (tx) => tx`update public.profiles set is_active = ${v.active === "true"} where id = ${v.id}`);
-  revalidatePath("/yonetim/kullanicilar");
+/**
+ * Kullanıcıyı sistemden kaldırır: daveti silinir, hesabı (giriş yaptıysa) kapatılır, ekiple bağı kopar.
+ * Ekibin öğrencileri ve yoklamaları olduğu gibi kalır. Aynı e-posta yeniden davet edilirse hesap tekrar açılır.
+ */
+export async function removeUser(invitationId: string): Promise<InlineResult> {
+  const id = uuid.safeParse(invitationId);
+  if (!id.success) return { ok: false, error: "Bilgiler geçersiz" };
+  try {
+    const viewer = await requireAdmin();
+    const res = await asUser(viewer.userId, async (tx) => {
+      const [inv] = await tx<{ email: string }[]>`select email from public.invitations where id = ${id.data}`;
+      if (!inv) return "yok";
+      const [p] = await tx<{ id: string }[]>`select id from public.profiles where email = ${inv.email}`;
+      if (p?.id === viewer.userId) return "kendin";
+      if (p) {
+        await tx`update public.teams set leader_id = null where leader_id = ${p.id}`;
+        await tx`update public.profiles set is_active = false where id = ${p.id}`;
+      }
+      await tx`delete from public.invitations where id = ${id.data}`;
+      return "ok";
+    });
+    if (res === "kendin") return { ok: false, error: "Kendi hesabını silemezsin" };
+  } catch {
+    return { ok: false, error: "Silinemedi" };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function updateTeam(_prev: FormState, formData: FormData): Promise<FormState> {
