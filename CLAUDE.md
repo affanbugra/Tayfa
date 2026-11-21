@@ -42,7 +42,7 @@ görünümlü bir web uygulaması.
 | Konu | Karar |
 |---|---|
 | Barındırma | **Vercel** (uygulama) + **Supabase** (Postgres + Auth). Supabase projesi **Frankfurt (eu-central-1)** bölgesinde açılır. Kod, ileride Türkiye'de bir sunucuya taşınabilecek şekilde yazılır: standart Postgres, Supabase'e özgü kilitlenme minimum düzeyde. |
-| Domain | Ücretsiz Vercel alt adresi (ör. `tayfa-yoklama.vercel.app`). |
+| Domain | **`www.tayfagenc.com`** (21 Kasım 2026; Türkticaret'ten alındı, çünkü Türk servis sağlayıcıları `*.vercel.app`'i engelliyor). Çıplak alan adı `tayfagenc.com` www'ye 308 ile yönlenir. DNS Türkticaret'te: `A @ 216.198.79.1`, `CNAME www 65e9b33580e3fc3f.vercel-dns-017.com.` `tayfa-yoklama.vercel.app` da çalışmaya devam eder. Google istemcisinde iki alan adı da JS kökeni ve `/auth/google` dönüşü olarak ekli. Bekleyen: Supabase › Auth › URL Configuration'a `https://www.tayfagenc.com/**` (sadece yedek giriş yöntemi için). |
 | Giriş | **Sadece Google ile giriş.** Yalnızca yönetimin davet listesine eklediği e-postalar girebilir. Listede olmayan biri giriş yaparsa "Erişiminiz yok, yöneticinizle iletişime geçin" ekranını görür. |
 | Roller | Sadece iki rol: `admin` (yönetici: her şeyi okur ve yazar, raporlar, ayarlar) ve `leader` (lider: yalnızca kendi ekibini okur ve yazar). Koordinatör ve izleyici rolü **yok**. Ayrıntılar §4'te. |
 | Lider yetkisi | Lider kendi ekibinde **tam yetkilidir**: öğrenci ekler, düzenler, durumunu değiştirir (çıkarıldı dahil). Her değişiklik denetim kaydına yazılır. |
