@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { addSchool, createTeam, mergeSchools, reactivateTeam, renameSchool, saveActivityType } from "@/app/actions/admin";
 import { ActionForm } from "@/components/action-form";
+import { DeleteTeamButton } from "@/components/delete-team-button";
 import { Card, Field, PageTitle, inputClass } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/auth";
 import { asUser } from "@/lib/db";
@@ -39,13 +40,16 @@ export default async function SettingsPage() {
           {teams.map((t) => (
             <li key={t.id} className="flex min-h-10 items-center justify-between border-b border-border text-sm">
               <Link href={`/yonetim/ekipler/${t.id}`} className="hover:text-brand-strong hover:underline">{t.name}</Link>
-              {!t.is_active && (
-                <form action={reactivateTeam} className="flex items-center gap-2">
-                  <input type="hidden" name="teamId" value={t.id} />
-                  <span className="text-xs text-removed">{tr.sheet.archived}</span>
-                  <button type="submit" className="text-xs font-medium text-brand-strong hover:underline">{tr.sheet.unarchive}</button>
-                </form>
-              )}
+              <span className="flex items-center gap-2">
+                {!t.is_active && (
+                  <form action={reactivateTeam} className="flex items-center gap-2">
+                    <input type="hidden" name="teamId" value={t.id} />
+                    <span className="text-xs text-removed">{tr.sheet.archived}</span>
+                    <button type="submit" className="text-xs font-medium text-brand-strong hover:underline">{tr.sheet.unarchive}</button>
+                  </form>
+                )}
+                <DeleteTeamButton teamId={t.id} />
+              </span>
             </li>
           ))}
         </ul>

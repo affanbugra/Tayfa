@@ -174,6 +174,7 @@ export const tr = {
     removeInvite: "Daveti sil",
     removeUser: "Sil",
     removeSure: "Emin misin? Tekrar bas",
+    teamArchivedInstead: "Öğrencisi olduğu için silinmedi, arşivlendi",
     usersHint: "Sadece bu listedeki e-postalar Google ile giriş yapabilir. Silinen kişinin girişi kapanır; ekibinin öğrencileri ve yoklamaları olduğu gibi kalır.",
     settingsTitle: "Ayarlar",
     activityTypes: "Etkinlik türleri",

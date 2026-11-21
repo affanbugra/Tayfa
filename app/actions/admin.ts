@@ -271,3 +271,32 @@ export async function addSchool(_prev: FormState, formData: FormData): Promise<F
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+/**
+ * Ayarlar: ekibi siler. Öğrencisi veya buluşması olmayan (yanlışlıkla açılmış) ekip tamamen silinir;
+ * verisi olan ekip veri kaybolmasın diye arşivlenir. Ekibin lider daveti silinir, liderin hesabı kapanır.
+ */
+export async function deleteTeam(teamId: string): Promise<{ ok: true; archived: boolean } | { ok: false; error: string }> {
+  const id = uuid.safeParse(teamId);
+  if (!id.success) return { ok: false, error: "Bilgiler geçersiz" };
+  try {
+    const viewer = await requireAdmin();
+    const archived = await asUser(viewer.userId, async (tx) => {
+      const [c] = await tx<{ n: number }[]>`
+        select (select count(*) from public.students where team_id = ${id.data})::int
+             + (select count(*) from public.sessions where team_id = ${id.data})::int as n`;
+      if (c.n > 0) {
+        await tx`update public.teams set is_active = false where id = ${id.data}`;
+        return true;
+      }
+      await assignLeader(tx, id.data, "", viewer.userId);
+      await tx`delete from public.invitations where team_id = ${id.data} and role = 'leader'`;
+      await tx`delete from public.teams where id = ${id.data}`;
+      return false;
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, archived };
+  } catch {
+    return { ok: false, error: "Silinemedi" };
+  }
+}

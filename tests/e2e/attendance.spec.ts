@@ -116,3 +116,23 @@ test("yönetici lideri siler, lider giremez; yeniden eklenince girer", async ({ 
   await login(again, "lider@ornek.test");
   await expect(again).toHaveURL(/\/ekibim$/);
 });
+
+test("yönetici boş ekibi Ayarlar'dan siler, dolu ekip arşivlenir", async ({ page }) => {
+  await login(page, "yonetici@ornek.test");
+  await expect(page).toHaveURL(/\/yonetim$/);
+  await page.goto("/yonetim/ayarlar");
+  await page.getByLabel("Yeni ekip adı").fill("Silinecek Ekip");
+  await page.getByRole("button", { name: "Ekip ekle" }).click();
+  const empty = page.locator("li", { hasText: "Silinecek Ekip" });
+  await expect(empty).toBeVisible();
+  await empty.getByRole("button", { name: "Sil" }).click();
+  await empty.getByRole("button", { name: /Emin misin/ }).click();
+  await expect(empty).toHaveCount(0);
+
+  const full = page.locator("li", { hasText: "Deniz Ak · 10" });
+  await full.getByRole("button", { name: "Sil" }).click();
+  await full.getByRole("button", { name: /Emin misin/ }).click();
+  await expect(full.getByText("Arşivde")).toBeVisible();
+  await full.getByRole("button", { name: "Geri aç" }).click();
+  await expect(full.getByText("Arşivde")).toHaveCount(0);
+});
